@@ -44,10 +44,6 @@ export function Navbar() {
               <Link href="/sell" className="border-reveal text-sm tracking-widest uppercase">
                 Sell
               </Link>
-              <Link href="/drops" className="border-reveal text-sm tracking-widest uppercase flex items-center gap-2">
-                Drops
-                <span className="bg-accent text-background text-[10px] px-2 py-0.5 rounded-full">NEW</span>
-              </Link>
             </div>
 
             {/* Right side */}

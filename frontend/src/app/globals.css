@@ -139,3 +139,8 @@ body {
 .wallet-adapter-modal-wrapper {
   background: var(--card) !important;
 }
+
+/* Ensure modal title text is readable (force black) */
+.wallet-adapter-modal-title {
+  color: #000 !important;
+}
