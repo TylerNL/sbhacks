@@ -4,7 +4,6 @@ import google.generativeai as genai
 import os
 import requests
 from dotenv import load_dotenv
-from dummy_data import get_user_data, get_all_users
 from datetime import datetime
 import uuid
 
@@ -21,8 +20,6 @@ if GEMINI_KEY:
 else:
     model = None
 
-# Pinata IPFS Configuration
-# Get free API keys at https://app.pinata.cloud/
 PINATA_API_KEY = os.getenv("PINATA_API_KEY")
 PINATA_SECRET_KEY = os.getenv("PINATA_SECRET_KEY")
 

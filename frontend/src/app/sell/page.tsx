@@ -15,7 +15,8 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 interface UploadedImage {
   url: string;
-  ipfsHash: string;
+  id: string;      // Pinata file ID (for deletion)
+  cid: string;     // IPFS CID
   isUploading?: boolean;
 }
 
@@ -60,14 +61,14 @@ export default function SellPage() {
       // Add placeholder while uploading
       const tempId = Date.now().toString();
       const localPreview = URL.createObjectURL(file);
-      setImages(prev => [...prev, { url: localPreview, ipfsHash: tempId, isUploading: true }]);
+      setImages(prev => [...prev, { url: localPreview, id: tempId, cid: '', isUploading: true }]);
 
       try {
-        // Upload to IPFS via backend
+        // Upload via our API route (server-side) to avoid CORS issues
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch(`${API_URL}/api/upload`, {
+        const response = await fetch('/api/upload', {
           method: 'POST',
           body: formData,
         });
@@ -77,23 +78,20 @@ export default function SellPage() {
         if (result.success) {
           // Replace placeholder with actual IPFS URL
           setImages(prev => prev.map(img => 
-            img.ipfsHash === tempId 
-              ? { url: result.url, ipfsHash: result.ipfsHash, isUploading: false }
+            img.id === tempId 
+              ? { url: result.url, id: result.id, cid: result.cid, isUploading: false }
               : img
           ));
-          // Revoke the local preview URL
-          URL.revokeObjectURL(localPreview);
         } else {
-          // Remove failed upload
-          setImages(prev => prev.filter(img => img.ipfsHash !== tempId));
-          URL.revokeObjectURL(localPreview);
-          alert(`Upload failed: ${result.error}`);
+          throw new Error(result.error);
         }
+        // Revoke the local preview URL
+        URL.revokeObjectURL(localPreview);
       } catch (error) {
         console.error('Upload error:', error);
-        setImages(prev => prev.filter(img => img.ipfsHash !== tempId));
+        setImages(prev => prev.filter(img => img.id !== tempId));
         URL.revokeObjectURL(localPreview);
-        alert('Failed to upload image. Make sure the backend is running.');
+        alert('Failed to upload image to IPFS. Check your Pinata credentials.');
       }
     }
 
@@ -103,8 +101,22 @@ export default function SellPage() {
     }
   };
 
-  const removeImage = (ipfsHash: string) => {
-    setImages(prev => prev.filter(img => img.ipfsHash !== ipfsHash));
+  const removeImage = async (fileId: string) => {
+    // Remove from UI immediately
+    setImages(prev => prev.filter(img => img.id !== fileId));
+
+    // Delete from Pinata (fire and forget - don't block UI)
+    try {
+      await fetch('/api/upload', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: fileId }),
+      });
+      console.log('Deleted from Pinata:', fileId);
+    } catch (error) {
+      // Don't alert user - the image is already removed from UI
+      console.error('Failed to delete from Pinata:', error);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -199,7 +211,7 @@ export default function SellPage() {
             
             <div className="grid grid-cols-3 md:grid-cols-5 gap-4">
               {images.map((img) => (
-                <div key={img.ipfsHash} className="relative aspect-square bg-card border border-border overflow-hidden">
+                <div key={img.id} className="relative aspect-square bg-card border border-border overflow-hidden">
                   <img src={img.url} alt="Upload preview" className="w-full h-full object-cover" />
                   {img.isUploading ? (
                     <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
@@ -208,7 +220,7 @@ export default function SellPage() {
                   ) : (
                     <button
                       type="button"
-                      onClick={() => removeImage(img.ipfsHash)}
+                      onClick={() => removeImage(img.id)}
                       className="absolute top-2 right-2 p-1 bg-foreground text-background hover:bg-accent transition-colors"
                     >
                       <X size={14} />
