@@ -18,7 +18,7 @@ export function Navbar() {
         <div className="animate-marquee whitespace-nowrap flex">
           {[...Array(10)].map((_, i) => (
             <span key={i} className="mx-8 text-xs tracking-[0.3em] uppercase font-mono">
-              SOLANA FASHION • ZERO FEES • INSTANT PAYMENT • P2P TRADES • 
+              SOLANA BASED • ZERO FEES • INSTANT PAYMENT • P2P TRADES • 
             </span>
           ))}
         </div>

@@ -3,9 +3,10 @@
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { motion } from 'framer-motion';
-import { Upload, ImagePlus, X, Loader2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Upload, ImagePlus, X, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { useState, useRef } from 'react';
+import { createClient, type Session } from "@supabase/supabase-js";
 
 const categories = ['Tops', 'Bottoms', 'Outerwear', 'Shoes', 'Accessories', 'Bags'];
 const conditions = ['New with tags', 'Like new', 'Good', 'Fair'];
@@ -20,11 +21,35 @@ interface UploadedImage {
   isUploading?: boolean;
 }
 
+interface ModalState {
+  isOpen: boolean;
+  type: 'success' | 'error';
+  title: string;
+  message: string;
+}
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error(
+    "Missing Supabase env vars: NEXT_PUBLIC_SUPABASE_URL and/or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY"
+  );
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
+
 export default function SellPage() {
   const { publicKey, connected } = useWallet();
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [modal, setModal] = useState<ModalState>({
+    isOpen: false,
+    type: 'success',
+    title: '',
+    message: '',
+  });
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -33,6 +58,14 @@ export default function SellPage() {
     condition: '',
     size: '',
   });
+
+  const showModal = (type: 'success' | 'error', title: string, message: string) => {
+    setModal({ isOpen: true, type, title, message });
+  };
+
+  const closeModal = () => {
+    setModal(prev => ({ ...prev, isOpen: false }));
+  };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -122,52 +155,57 @@ export default function SellPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!connected) {
-      alert('Please connect your wallet first');
+    if (!connected || !publicKey) {
+      showModal('error', 'Wallet Required', 'Please connect your wallet first');
       return;
     }
 
     if (images.length === 0) {
-      alert('Please add at least one image');
+      showModal('error', 'Images Required', 'Please add at least one image');
       return;
     }
 
     if (images.some(img => img.isUploading)) {
-      alert('Please wait for images to finish uploading');
+      showModal('error', 'Please Wait', 'Please wait for images to finish uploading');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      const listingData = {
-        ...form,
-        price: parseFloat(form.price),
-        image: images[0].url, // Primary image
-        images: images.map(img => img.url), // All images
-        seller: publicKey?.toString(),
-      };
+      // Insert listing into Supabase
+      const { data, error } = await supabase
+        .from('Listings')
+        .insert({
+          product_name: form.title,
+          wallet_address: publicKey.toString(),
+          description: form.description,
+          img_urls: images.map(img => img.url), // Array of IPFS URLs
+          sold: false,
+          category: form.category,
+          condition: form.condition,
+          size: form.size,
+          price: parseFloat(form.price) //IN SOL,
+        })
+        .select()
+        .single();
 
-      const response = await fetch(`${API_URL}/api/listings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(listingData),
-      });
-
-      const result = await response.json();
-      
-      if (response.ok) {
-        alert('Listing created successfully!');
-        // Reset form
-        setForm({ title: '', description: '', price: '', category: '', condition: '', size: '' });
-        setImages([]);
-        // Could redirect to listing page: router.push(`/listing/${result.id}`);
-      } else {
-        alert(`Failed to create listing: ${result.error}`);
+      if (error) {
+        throw error;
       }
-    } catch (error) {
+      
+      console.log('Listing created:', data);
+      showModal('success', 'Listing Created!', 'Your item has been listed successfully.');
+      
+      // Reset form
+      setForm({ title: '', description: '', price: '', category: '', condition: '', size: '' });
+      setImages([]);
+      
+      // Optionally redirect to the listing page
+      // router.push(`/listing/${data.id}`);
+    } catch (error: any) {
       console.error('Submit error:', error);
-      alert('Failed to create listing. Make sure the backend is running.');
+      showModal('error', 'Failed to Create Listing', error.message || 'An unknown error occurred. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -184,7 +222,7 @@ export default function SellPage() {
         >
           <h1 className="text-5xl md:text-6xl font-bold tracking-tight mb-4">SELL</h1>
           <p className="text-muted text-lg mb-12">
-            List your item in under 2 minutes. Get paid instantly in SOL.
+            List your item in under 2 minutes.
           </p>
         </motion.div>
 
@@ -366,10 +404,20 @@ export default function SellPage() {
             ) : (
               <button
                 type="submit"
-                className="w-full py-5 bg-foreground text-background font-bold uppercase tracking-wider text-lg hover:bg-accent transition-colors flex items-center justify-center gap-3"
+                disabled={isSubmitting}
+                className="w-full py-5 bg-foreground text-background font-bold uppercase tracking-wider text-lg hover:bg-accent transition-colors flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Upload size={20} />
-                List Item
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={20} className="animate-spin" />
+                    Creating Listing...
+                  </>
+                ) : (
+                  <>
+                    <Upload size={20} />
+                    List Item
+                  </>
+                )}
               </button>
             )}
           </motion.div>
@@ -377,6 +425,67 @@ export default function SellPage() {
       </section>
 
       <Footer />
+
+      {/* Success/Error Modal */}
+      <AnimatePresence>
+        {modal.isOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={closeModal}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            />
+            
+            {/* Modal */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md"
+            >
+              <div className="bg-background border border-border p-8 mx-4">
+                {/* Icon */}
+                <div className={`w-16 h-16 mx-auto mb-6 flex items-center justify-center ${
+                  modal.type === 'success' ? 'bg-green-500/10' : 'bg-red-500/10'
+                }`}>
+                  {modal.type === 'success' ? (
+                    <CheckCircle className="w-8 h-8 text-green-500" />
+                  ) : (
+                    <AlertCircle className="w-8 h-8 text-red-500" />
+                  )}
+                </div>
+                
+                {/* Title */}
+                <h3 className={`text-2xl font-bold text-center mb-3 ${
+                  modal.type === 'success' ? 'text-green-500' : 'text-red-500'
+                }`}>
+                  {modal.title}
+                </h3>
+                
+                {/* Message */}
+                <p className="text-muted text-center mb-8">
+                  {modal.message}
+                </p>
+                
+                {/* Button */}
+                <button
+                  onClick={closeModal}
+                  className={`w-full py-4 font-bold uppercase tracking-wider transition-colors ${
+                    modal.type === 'success' 
+                      ? 'bg-green-500 text-white hover:bg-green-600' 
+                      : 'bg-foreground text-background hover:bg-accent'
+                  }`}
+                >
+                  {modal.type === 'success' ? 'Done' : 'Try Again'}
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </main>
   );
 }
