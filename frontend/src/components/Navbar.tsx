@@ -3,26 +3,86 @@
 import Link from 'next/link';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { Menu, X } from 'lucide-react';
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { usePathname, useRouter } from 'next/navigation';
+import Image from 'next/image';
+import { useEffect, useState } from 'react';
+import { supabase } from './supabaseClient';
 
 export function Navbar() {
   const { publicKey } = useWallet();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const pathname = usePathname();
+  const router = useRouter();
+
+  const [firstName, setFirstName] = useState<string | null>(null);
+  const [lastInitial, setLastInitial] = useState<string | null>(null);
+  const [initials, setInitials] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!publicKey) {
+      setFirstName(null);
+      setLastInitial(null);
+      setInitials(null);
+      return;
+    }
+
+    const fetchProfile = async () => {
+      const address = publicKey.toString();
+
+      // Try common table / column names — adjust if your DB uses different names
+      let { data, error } = await supabase
+        .from('profiles')
+        .select('first_name,last_name')
+        .eq('id', address)
+        .single();
+
+      if (error || !data) {
+        // fallback: try 'address' column on profiles
+        const res = await supabase
+          .from('profiles')
+          .select('first_name,last_name')
+          .eq('address', address)
+          .single();
+
+        if (!res.error && res.data) {
+          data = res.data;
+        } else {
+          // fallback: try 'users' table
+          const res2 = await supabase
+            .from('users')
+            .select('first_name,last_name')
+            .eq('wallet_address', address)
+            .single();
+
+          if (!res2.error && res2.data) data = res2.data;
+        }
+      }
+
+      if (data) {
+        const f = data.first_name ?? '';
+        const l = data.last_name ?? '';
+        setFirstName(f);
+        setLastInitial(l ? `${l[0].toUpperCase()}.` : '');
+        setInitials(`${(f[0] || '').toUpperCase()}${(l[0] || '').toUpperCase()}`);
+      }
+    };
+
+    fetchProfile();
+  }, [publicKey]);
 
   return (
     <>
-      {/* Top ticker */}
-      <div className="bg-foreground text-background overflow-hidden py-2">
-        <div className="animate-marquee whitespace-nowrap flex">
-          {[...Array(10)].map((_, i) => (
-            <span key={i} className="mx-8 text-xs tracking-[0.3em] uppercase font-mono">
-              SOLANA BASED • ZERO FEES • INSTANT PAYMENT • P2P TRADES • 
-            </span>
-          ))}
+      {/* Top ticker (visible only on main page) */}
+      {pathname === '/' && (
+        <div className="bg-foreground text-background overflow-hidden py-2">
+          <div className="animate-marquee whitespace-nowrap flex">
+            {[...Array(10)].map((_, i) => (
+              <span key={i} className="mx-8 text-xs tracking-[0.3em] uppercase font-mono">
+                SOLANA BASED • ZERO FEES • INSTANT PAYMENT • P2P TRADES • 
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Main nav */}
       <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border">
@@ -49,63 +109,36 @@ export function Navbar() {
             {/* Right side */}
             <div className="flex items-center gap-4">
               {publicKey && (
-                <Link 
-                  href="/profile" 
-                  className="hidden md:block text-xs font-mono bg-card border border-border px-4 py-2 hover:border-foreground transition-colors"
-                >
-                  {publicKey.toString().slice(0, 4)}...{publicKey.toString().slice(-4)}
-                </Link>
+                <div className="hidden sm:flex items-center gap-3 mr-2">
+                  <div className="w-8 h-8 rounded-full bg-accent text-background flex items-center justify-center font-bold">
+                    {initials || 'U'}
+                  </div>
+                  {firstName && (
+                    <span className="text-sm font-medium">Hi, {firstName} {lastInitial}</span>
+                  )}
+                </div>
               )}
+
               <WalletMultiButton />
-              
-              {/* Mobile menu */}
-              <button 
-                onClick={() => setMenuOpen(!menuOpen)}
-                className="md:hidden p-2"
-              >
-                {menuOpen ? <X size={24} /> : <Menu size={24} />}
-              </button>
+
+              {publicKey && (
+                <button
+                  onClick={() => router.push('/profile')}
+                  aria-label="Profile"
+                  title="Profile"
+                  className="ml-2 flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-accent rounded-full"
+                >
+                  <div className="w-10 h-10 rounded-full overflow-hidden bg-transparent">
+                    <Image src="/default-profile.svg" alt="Profile" width={40} height={40} />
+                  </div>
+                </button>
+              )}
             </div>
           </div>
         </div>
       </nav>
 
-      {/* Mobile menu overlay */}
-      <AnimatePresence>
-        {menuOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="fixed inset-0 top-[105px] bg-background z-40 md:hidden"
-          >
-            <div className="flex flex-col items-center justify-center h-full gap-12">
-              <Link 
-                href="/shop" 
-                onClick={() => setMenuOpen(false)}
-                className="text-4xl font-bold hover:text-accent transition-colors"
-              >
-                SHOP
-              </Link>
-              <Link 
-                href="/sell" 
-                onClick={() => setMenuOpen(false)}
-                className="text-4xl font-bold hover:text-accent transition-colors"
-              >
-                SELL
-              </Link>
-              <Link 
-                href="/drops" 
-                onClick={() => setMenuOpen(false)}
-                className="text-4xl font-bold hover:text-accent transition-colors"
-              >
-                DROPS
-              </Link>
-              
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+
     </>
   );
 }
