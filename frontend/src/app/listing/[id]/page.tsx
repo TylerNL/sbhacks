@@ -4,17 +4,19 @@ import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Heart, Share2, Shield, Truck, ArrowLeft } from 'lucide-react';
+import { Heart, Share2, Shield, Truck, ArrowLeft, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { PublicKey } from '@solana/web3.js';
+import { createTransferTransaction, sendAndConfirmTransaction, getExplorerUrl } from '@/lib/solana';
 
-// Dummy data - in real app this would come from API
+// Dummy data - in real app this would come from API/backend
 const listing = {
   id: '1',
   title: 'Vintage Nike Windbreaker',
   description: 'Authentic 90s Nike windbreaker in excellent vintage condition. Features classic colorblock design with embroidered swoosh logo. Minor signs of wear consistent with age. Perfect for layering.',
-  price: 0.5,
+  price: 0.01, // Small amount for devnet testing
   images: [
     'https://picsum.photos/seed/nike1/800/1000',
     'https://picsum.photos/seed/nike2/800/1000',
@@ -24,7 +26,8 @@ const listing = {
   category: 'Outerwear',
   condition: 'Good',
   seller: {
-    address: 'DemoWallet123abc456def789',
+    // Replace with a real devnet wallet address for testing
+    address: 'Ei9QNRNo5hVmnrHCaXevpJCqrrTWyp1sFt15pxihqA3M', // Kent Wallet
     name: 'VintageFinds',
     rating: 4.8,
     sales: 47,
@@ -33,22 +36,64 @@ const listing = {
 
 export default function ListingPage() {
   const params = useParams();
-  const { publicKey, connected } = useWallet();
+  const { publicKey, connected, signTransaction } = useWallet();
   const [selectedImage, setSelectedImage] = useState(0);
   const [liked, setLiked] = useState(false);
   const [buying, setBuying] = useState(false);
+  const [txSignature, setTxSignature] = useState<string | null>(null);
 
   const handleBuy = async () => {
-    if (!connected) {
+    if (!connected || !publicKey || !signTransaction) {
       alert('Please connect your wallet first');
       return;
     }
+
+    // Prevent buying your own listing
+    if (publicKey.toString() === listing.seller.address) {
+      alert("You can't buy your own listing!");
+      return;
+    }
+
     setBuying(true);
-    // TODO: Implement SOL transfer
-    setTimeout(() => {
-      alert('Purchase simulation complete!');
+    setTxSignature(null);
+
+    try {
+      // Create the transfer transaction
+      const sellerPubkey = new PublicKey(listing.seller.address);
+      const transaction = await createTransferTransaction(
+        publicKey,
+        sellerPubkey,
+        listing.price
+      );
+
+      // Request wallet to sign the transaction
+      const signedTx = await signTransaction(transaction);
+
+      // Send and confirm the transaction
+      const signature = await sendAndConfirmTransaction(signedTx);
+      
+      setTxSignature(signature);
+      alert(`Purchase successful! Transaction: ${signature.slice(0, 8)}...`);
+      
+      // TODO: Call backend to mark listing as sold
+      // await fetch(`/api/listings/${listing.id}/sold`, {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({ buyer: publicKey.toString(), tx_signature: signature }),
+      // });
+
+    } catch (error: any) {
+      console.error('Purchase error:', error);
+      if (error.message?.includes('User rejected')) {
+        alert('Transaction cancelled');
+      } else if (error.message?.includes('insufficient')) {
+        alert('Insufficient SOL balance. Get devnet SOL from a faucet!');
+      } else {
+        alert(`Purchase failed: ${error.message || 'Unknown error'}`);
+      }
+    } finally {
       setBuying(false);
-    }, 2000);
+    }
   };
 
   return (
@@ -157,13 +202,27 @@ export default function ListingPage() {
 
             {/* Actions */}
             <div className="space-y-4">
-              <button
-                onClick={handleBuy}
-                disabled={buying}
-                className="w-full py-5 bg-foreground text-background font-bold uppercase tracking-wider text-lg hover:bg-accent transition-colors disabled:opacity-50"
-              >
-                {buying ? 'Processing...' : connected ? 'Buy Now' : 'Connect Wallet to Buy'}
-              </button>
+              {txSignature ? (
+                <div className="p-4 bg-green-500/10 border border-green-500/30">
+                  <p className="text-green-400 font-bold mb-2">✓ Purchase Complete!</p>
+                  <a
+                    href={getExplorerUrl(txSignature)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-mono text-green-400 hover:text-green-300 flex items-center gap-2"
+                  >
+                    View Transaction <ExternalLink size={14} />
+                  </a>
+                </div>
+              ) : (
+                <button
+                  onClick={handleBuy}
+                  disabled={buying}
+                  className="w-full py-5 bg-foreground text-background font-bold uppercase tracking-wider text-lg hover:bg-accent transition-colors disabled:opacity-50"
+                >
+                  {buying ? 'Processing...' : connected ? `Buy Now • ${listing.price} SOL` : 'Connect Wallet to Buy'}
+                </button>
+              )}
               
               <div className="flex gap-4">
                 <button
