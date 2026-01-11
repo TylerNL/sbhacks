@@ -1,17 +1,24 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, abort
 from flask_cors import CORS
 import google.generativeai as genai
 import os
 import requests
 from dotenv import load_dotenv
-from dummy_data import get_user_data, get_all_users
 from datetime import datetime
 import uuid
+import psycopg2
 
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
+
+USER = os.getenv("user")
+PASSWORD = os.getenv("password")
+HOST = os.getenv("host")
+PORT = os.getenv("port")
+DBNAME = os.getenv("dbname")
+
 
 # Configure Gemini API
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
@@ -21,8 +28,6 @@ if GEMINI_KEY:
 else:
     model = None
 
-# Pinata IPFS Configuration
-# Get free API keys at https://app.pinata.cloud/
 PINATA_API_KEY = os.getenv("PINATA_API_KEY")
 PINATA_SECRET_KEY = os.getenv("PINATA_SECRET_KEY")
 
@@ -108,6 +113,64 @@ def create_listing():
     }
     listings.append(listing)
     return jsonify(listing), 201
+
+@app.route('/api/user', methods=['POST'])
+def sign_up():
+    try:
+        wallet_address = request.args.get("walletAddress")
+        first_name = request.args.get("first_name")
+        last_name = request.args.get("last_name")
+        email = request.args.get("email")
+        streetAddress = request.args.get("streetAddress")
+        city = request.args.get("city")
+        state = request.args.get("state")
+        zip_code = request.args.get("zip_code")
+        country = request.args.get("country")
+
+        connection = psycopg2.connect(
+                user=USER,
+                password=PASSWORD,
+                host=HOST,
+                port=PORT,
+                dbname=DBNAME
+        )
+        cursor = connection.cursor()
+        cursor.execute("""
+        INSERT INTO "Userbase"
+        (id, first_name, last_name, email, address, city, state, zip, country)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (wallet_address, first_name, last_name, email, streetAddress, city, state, zip_code, country))
+
+        connection.commit()
+        return jsonify({"success": True}), 201
+    finally:
+        cursor.close()
+        connection.close()
+
+@app.route('/api/check-user', methods=['GET'])
+def check_user():
+    try:
+        wallet_address = request.args.get("walletAddress")
+        connection = psycopg2.connect(
+                user=USER,
+                password=PASSWORD,
+                host=HOST,
+                port=PORT,
+                dbname=DBNAME
+        )
+        cursor = connection.cursor()
+        cursor.execute("""
+        SELECT id
+        FROM "Userbase"
+        WHERE id = %s
+        """, (wallet_address,))
+
+        return jsonify({"exists": cursor.fetchone() is not None})
+    finally:
+        cursor.close()
+        connection.close()
+
+
 
 
 @app.route('/api/listings/<listing_id>/sold', methods=['POST'])
@@ -239,6 +302,11 @@ def get_user(user_id):
 def health_check():
     """Health check endpoint."""
     return jsonify({"status": "healthy", "service": "financial-coach-api"})
+
+
+"""@app.route("/api/user/<user_id>/listings", methods=["GET"])
+def user_listings(user_id):"""
+    
 
 
 if __name__ == "__main__":
