@@ -26,7 +26,7 @@ export function Footer() {
             <ul className="space-y-3">
               {['Shop All', 'Trending'].map((item) => (
                 <li key={item}>
-                  <Link href="#" className="text-sm hover:text-accent transition-colors">
+                  <Link href={item === 'Shop All' ? '/shop' : '#'} className="text-sm hover:text-accent transition-colors">
                     {item}
                   </Link>
                 </li>
@@ -39,7 +39,7 @@ export function Footer() {
             <ul className="space-y-3">
               {['List an Item', 'Seller Guide','Verification'].map((item) => (
                 <li key={item}>
-                  <Link href="#" className="text-sm hover:text-accent transition-colors">
+                  <Link href={item === 'List an Item' ? '/sell' : '#'} className="text-sm hover:text-accent transition-colors">
                     {item}
                   </Link>
                 </li>

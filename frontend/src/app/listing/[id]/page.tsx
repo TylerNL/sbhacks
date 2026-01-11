@@ -43,8 +43,7 @@ export default function ListingPage() {
       alert('Please connect your wallet first');
       return;
     }
-    setBuying(true);
-    // TODO: Implement SOL transfer
+    setBuying(true);  
     setTimeout(() => {
       alert('Purchase simulation complete!');
       setBuying(false);
