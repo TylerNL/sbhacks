@@ -6,7 +6,7 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
-import { supabase } from './supabaseClient';
+import { supabase } from '@/lib/supabase';   // ✅ Correct
 
 export function Navbar() {
   const { publicKey } = useWallet();

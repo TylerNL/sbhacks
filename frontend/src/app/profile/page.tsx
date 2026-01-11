@@ -3,22 +3,14 @@
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { motion } from 'framer-motion';
-import { Settings, Copy, ExternalLink, Loader2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Settings, Copy, ExternalLink, X, Save, User, MapPin, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { createClient } from "@supabase/supabase-js";
 import Link from 'next/link';
+// Use the centralized client we created earlier
+import { supabase } from '@/lib/supabase';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error(
-    "Missing Supabase env vars: NEXT_PUBLIC_SUPABASE_URL and/or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY"
-  );
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey);
-
+// Interface for your teammate's Listing data
 interface Listing {
   id: string;
   product_name: string;
@@ -36,79 +28,42 @@ interface Listing {
 
 export default function ProfilePage() {
   const { publicKey, connected } = useWallet();
+  
+  // --- STATE MANAGEMENT ---
   const [activeTab, setActiveTab] = useState<'listings' | 'purchases' | 'saved'>('listings');
+  
+  // Teammate's Data State (Real Data)
   const [userListings, setUserListings] = useState<Listing[]>([]);
   const [userPurchases, setUserPurchases] = useState<Listing[]>([]);
   const [userSaves, setUserSaves] = useState<Listing[]>([]);
-  const [isLoadingSaves, setIsLoadingSaves] = useState(true);
-  const [isLoadingListings, setIsLoadingListings] = useState(true);
-  const [isLoadingPurchases, setIsLoadingPurchases] = useState(true);
   
-    // Fetch user's Saves from Supabase
-  useEffect(() => {
-    const fetchUserSaves = async () => {
-      if (!publicKey) {
-        setUserSaves([]);
-        setIsLoadingSaves(false);
-        return;
-      }
+  // Loading States
+  const [isLoadingSaves, setIsLoadingSaves] = useState(false); // Default false until we try to fetch
+  const [isLoadingListings, setIsLoadingListings] = useState(false);
+  const [isLoadingPurchases, setIsLoadingPurchases] = useState(false);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
-      setIsLoadingSaves(true);
-      try {
-        // First, get the favorited listing IDs from Userbase
-        const { data: userData, error: userError } = await supabase
-          .from('Userbase')
-          .select('saved')
-          .eq('id', publicKey.toString())
-          .single();
+  // Settings Drawer State (These were missing in your snippet!)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'personal' | 'shipping'>('personal');
+  const [isSaving, setIsSaving] = useState(false);
 
-        if (userError) {
-          console.error('Error fetching user favorites:', userError);
-          setUserSaves([]);
-          setIsLoadingSaves(false);
-          return;
-        }
+  // Form Data (Split Name)
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    address: '',
+    city: '',
+    state: '',
+    zip: '',
+    country: '',
+  });
 
-        const savedIds = userData?.saved || [];
-        
-        if (savedIds.length === 0) {
-          setUserSaves([]);
-          setIsLoadingSaves(false);
-          return;
-        }
-
-        // Then fetch the actual listings using those IDs
-        const { data: listingsData, error: listingsError } = await supabase
-          .from('Listings')
-          .select('*')
-          .in('id', savedIds);
-
-        if (listingsError) {
-          console.error('Error fetching saved listings:', listingsError);
-          setUserSaves([]);
-        } else {
-          setUserSaves(listingsData || []);
-        }
-      } catch (error) {
-        console.error('Error:', error);
-        setUserSaves([]);
-      } finally {
-        setIsLoadingSaves(false);
-      }
-    };
-
-    fetchUserSaves();
-  }, [publicKey]);
-
-  // Fetch user's listings from Supabase
+  // --- 1. FETCH LISTINGS (Teammate's Feature) ---
   useEffect(() => {
     const fetchUserListings = async () => {
-      if (!publicKey) {
-        setUserListings([]);
-        setIsLoadingListings(false);
-        return;
-      }
-
+      if (!publicKey) return;
       setIsLoadingListings(true);
       try {
         const { data, error } = await supabase
@@ -117,32 +72,22 @@ export default function ProfilePage() {
           .eq('wallet_address', publicKey.toString())
           .order('created_at', { ascending: false });
 
-        if (error) {
-          console.error('Error fetching listings:', error);
-          setUserListings([]);
-        } else {
-          setUserListings(data || []);
-        }
+        if (error) throw error;
+        setUserListings(data || []);
       } catch (error) {
-        console.error('Error:', error);
-        setUserListings([]);
+        console.error('Error fetching listings:', error);
       } finally {
         setIsLoadingListings(false);
       }
     };
 
-    fetchUserListings();
-  }, [publicKey]);
+    if (connected) fetchUserListings();
+  }, [publicKey, connected]);
 
-  // Fetch user's purchases from Supabase
+  // --- 2. FETCH PURCHASES (Teammate's Feature) ---
   useEffect(() => {
     const fetchUserPurchases = async () => {
-      if (!publicKey) {
-        setUserPurchases([]);
-        setIsLoadingPurchases(false);
-        return;
-      }
-
+      if (!publicKey) return;
       setIsLoadingPurchases(true);
       try {
         const { data, error } = await supabase
@@ -151,33 +96,60 @@ export default function ProfilePage() {
           .eq('purchased_from', publicKey.toString())
           .order('created_at', { ascending: false });
 
-        if (error) {
-          console.error('Error fetching purchases:', error);
-          setUserPurchases([]);
-        } else {
-          setUserPurchases(data || []);
-        }
+        if (error) throw error;
+        setUserPurchases(data || []);
       } catch (error) {
-        console.error('Error:', error);
-        setUserPurchases([]);
+        console.error('Error fetching purchases:', error);
       } finally {
         setIsLoadingPurchases(false);
       }
     };
 
-    fetchUserPurchases();
-  }, [publicKey]);
+    if (connected) fetchUserPurchases();
+  }, [publicKey, connected]);
 
-  const truncatedAddress = publicKey 
-    ? `${publicKey.toString().slice(0, 6)}...${publicKey.toString().slice(-4)}`
-    : '';
+  // --- 3. FETCH SAVED ITEMS (Teammate's Feature) ---
+  useEffect(() => {
+    const fetchUserSaves = async () => {
+      if (!publicKey) return;
+      setIsLoadingSaves(true);
+      try {
+        // 1. Get the array of saved IDs from Userbase
+        const { data: userData, error: userError } = await supabase
+          .from('Userbase')
+          .select('saved')
+          .eq('id', publicKey.toString())
+          .single();
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
+        if (userError) throw userError;
 
-  // --- 1. FETCH DATA ---
+        const savedIds = userData?.saved || [];
+        
+        if (savedIds.length === 0) {
+          setUserSaves([]);
+          return;
+        }
+
+        // 2. Fetch the actual listing details
+        const { data: listingsData, error: listingsError } = await supabase
+          .from('Listings')
+          .select('*')
+          .in('id', savedIds);
+
+        if (listingsError) throw listingsError;
+        setUserSaves(listingsData || []);
+        
+      } catch (error) {
+        console.error('Error fetching saves:', error);
+      } finally {
+        setIsLoadingSaves(false);
+      }
+    };
+
+    if (connected) fetchUserSaves();
+  }, [publicKey, connected]);
+
+  // --- 4. FETCH PROFILE SETTINGS (Our Feature) ---
   useEffect(() => {
     async function loadProfile() {
       if (!publicKey) return;
@@ -191,15 +163,21 @@ export default function ProfilePage() {
           .single();
 
         if (data) {
-          // Fallback logic: If first_name is missing but 'Full Name' exists (legacy data), try to split it
+          // Logic to handle legacy "Full Name" or new "first_name/last_name"
           let legacyFirst = '';
           let legacyLast = '';
+          
+          if (!data.first_name && data['Full Name']) {
+             const parts = data['Full Name'].split(' ');
+             legacyFirst = parts[0] || '';
+             legacyLast = parts.slice(1).join(' ') || '';
+          }
 
           setFormData({
-            firstName: data.first_name || legacyFirst || '', // Maps to 'first_name' column
-            lastName: data.last_name || legacyLast || '',    // Maps to 'last_name' column
+            firstName: data.first_name || legacyFirst || '',
+            lastName: data.last_name || legacyLast || '',
             email: data.email || '',
-            address: data.address || '',
+            address: data.address || '', // using lowercase 'address' column
             city: data.city || '',
             state: data.state || '',
             zip: data.zip || '',
@@ -213,17 +191,19 @@ export default function ProfilePage() {
       }
     }
 
-    if (connected && publicKey) {
-      loadProfile();
-    }
+    if (connected) loadProfile();
   }, [publicKey, connected]);
 
-  // --- 2. SAVE DATA ---
+  // --- HANDLERS ---
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
   const handleSaveSettings = async () => {
     if (!publicKey) return;
     setIsSaving(true);
 
-    // Combine for legacy support or display purposes if needed
     const fullName = `${formData.firstName} ${formData.lastName}`.trim();
 
     try {
@@ -232,10 +212,12 @@ export default function ProfilePage() {
         .upsert(
           {
             id: publicKey.toString(),
+            username: formData.firstName || 'User',
             
-            // SAVE TO NEW COLUMNS
+            // New Columns
             first_name: formData.firstName,
             last_name: formData.lastName,
+            'Full Name': fullName, // Keep for backward compatibility
 
             address: formData.address,
             email: formData.email,
@@ -248,7 +230,6 @@ export default function ProfilePage() {
         );
 
       if (error) throw error;
-      
       setIsSettingsOpen(false);
     } catch (error: any) {
       console.error('Error saving settings:', error);
@@ -258,7 +239,11 @@ export default function ProfilePage() {
     }
   };
 
-  // --- 3. HELPER: Avatar Initials ---
+  // --- HELPERS ---
+  const truncatedAddress = publicKey 
+    ? `${publicKey.toString().slice(0, 6)}...${publicKey.toString().slice(-4)}`
+    : '';
+
   const getAvatarInitials = () => {
     if (formData.firstName && formData.firstName.trim().length > 0) {
       return formData.firstName.charAt(0).toUpperCase();
@@ -266,7 +251,6 @@ export default function ProfilePage() {
     return truncatedAddress.slice(0, 2).toUpperCase();
   };
 
-  // Helper to display full name
   const getDisplayName = () => {
     const full = `${formData.firstName} ${formData.lastName}`.trim();
     return full.length > 0 ? full : truncatedAddress;
@@ -276,7 +260,6 @@ export default function ProfilePage() {
     if (publicKey) navigator.clipboard.writeText(publicKey.toString());
   };
 
-  // Truncate description to a certain length
   const truncateDescription = (desc: string | null, maxLength: number = 80) => {
     if (!desc) return 'No description';
     return desc.length > maxLength ? `${desc.slice(0, maxLength)}...` : desc;
@@ -307,18 +290,15 @@ export default function ProfilePage() {
           className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-12 pb-12 border-b border-border"
         >
           <div className="flex items-center gap-6">
-            {/* Avatar */}
             <div className="w-24 h-24 bg-accent flex items-center justify-center text-4xl font-bold text-foreground">
               {getAvatarInitials()}
             </div>
             
             <div>
               <div className="flex items-center gap-3 mb-2">
-                {/* NAME OR ADDRESS DISPLAY */}
                 <h1 className="text-3xl font-bold">
                   {getDisplayName()}
                 </h1>
-
                 <button onClick={copyAddress} className="p-2 hover:bg-card transition-colors">
                   <Copy size={16} />
                 </button>
@@ -365,7 +345,9 @@ export default function ProfilePage() {
           ))}
         </div>
 
-        {/* Tab Content */}
+        {/* --- DYNAMIC CONTENT (Teammate's Logic) --- */}
+        
+        {/* LISTINGS TAB */}
         {activeTab === 'listings' && (
           <div>
             {isLoadingListings ? (
@@ -383,44 +365,21 @@ export default function ProfilePage() {
                   >
                     <Link href={`/listing/${listing.id}`}>
                       <div className="group bg-card border border-border hover:border-foreground transition-colors overflow-hidden">
-                        {/* Image */}
                         <div className="aspect-[5/5] overflow-hidden bg-background">
                           {listing.img_urls && listing.img_urls.length > 0 ? (
-                            <img 
-                              src={listing.img_urls[0]} 
-                              alt={listing.product_name}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            />
+                            <img src={listing.img_urls[0]} alt={listing.product_name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"/>
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-muted">
-                              No Image
-                            </div>
+                            <div className="w-full h-full flex items-center justify-center text-muted">No Image</div>
                           )}
                         </div>
-                        
-                        {/* Info */}
                         <div className="p-4">
                           <div className="flex items-start justify-between gap-2 mb-2">
-                            <h3 className="font-bold text-lg leading-tight line-clamp-1">
-                              {listing.product_name}
-                            </h3>
-                            {listing.sold && (
-                              <span className="text-xs bg-red-500/20 text-red-400 px-2 py-1 uppercase font-mono">
-                                Sold
-                              </span>
-                            )}
+                            <h3 className="font-bold text-lg leading-tight line-clamp-1">{listing.product_name}</h3>
+                            {listing.sold && <span className="text-xs bg-red-500/20 text-red-400 px-2 py-1 uppercase font-mono">Sold</span>}
                           </div>
-                          
-                          <p className="text-sm text-muted mb-3 line-clamp-2">
-                            {truncateDescription(listing.description)}
-                          </p>
-                          
+                          <p className="text-sm text-muted mb-3 line-clamp-2">{truncateDescription(listing.description)}</p>
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-lg">{listing.price} SOL</span>
-                            <div className="flex gap-2 text-xs text-muted">
-                              {listing.size && <span>{listing.size}</span>}
-                              {listing.category && <span>• {listing.category}</span>}
-                            </div>
                           </div>
                         </div>
                       </div>
@@ -431,14 +390,13 @@ export default function ProfilePage() {
             ) : (
               <div className="text-center py-24">
                 <p className="text-muted mb-4">You haven&apos;t listed anything yet</p>
-                <Link href="/sell" className="text-accent font-bold uppercase tracking-wider">
-                  List your first item →
-                </Link>
+                <Link href="/sell" className="text-accent font-bold uppercase tracking-wider">List your first item →</Link>
               </div>
             )}
           </div>
         )}
 
+        {/* PURCHASES TAB */}
         {activeTab === 'purchases' && (
           <div>
             {isLoadingPurchases ? (
@@ -456,47 +414,19 @@ export default function ProfilePage() {
                   >
                     <Link href={`/listing/${listing.id}`}>
                       <div className="group bg-card border border-border hover:border-foreground transition-colors overflow-hidden">
-                        {/* Image */}
                         <div className="aspect-[5/5] overflow-hidden bg-background">
                           {listing.img_urls && listing.img_urls.length > 0 ? (
-                            <img 
-                              src={listing.img_urls[0]} 
-                              alt={listing.product_name}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            />
+                            <img src={listing.img_urls[0]} alt={listing.product_name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"/>
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-muted">
-                              No Image
-                            </div>
+                            <div className="w-full h-full flex items-center justify-center text-muted">No Image</div>
                           )}
                         </div>
-                        
-                        {/* Info */}
                         <div className="p-4">
                           <div className="flex items-start justify-between gap-2 mb-2">
-                            <h3 className="font-bold text-lg leading-tight line-clamp-1">
-                              {listing.product_name}
-                            </h3>
-                            <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 uppercase font-mono">
-                              Purchased
-                            </span>
+                            <h3 className="font-bold text-lg leading-tight line-clamp-1">{listing.product_name}</h3>
+                            <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 uppercase font-mono">Purchased</span>
                           </div>
-                          
-                          <p className="text-sm text-muted mb-3 line-clamp-2">
-                            {truncateDescription(listing.description)}
-                          </p>
-                          
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-lg">{listing.price} SOL</span>
-                            <div className="flex gap-2 text-xs text-muted">
-                              {listing.size && <span>{listing.size}</span>}
-                              {listing.category && <span>• {listing.category}</span>}
-                            </div>
-                          </div>
-                          
-                          <p className="text-xs text-muted mt-2">
-                            From: {listing.wallet_address.slice(0, 4)}...{listing.wallet_address.slice(-4)}
-                          </p>
+                          <span className="font-bold text-lg">{listing.price} SOL</span>
                         </div>
                       </div>
                     </Link>
@@ -506,14 +436,13 @@ export default function ProfilePage() {
             ) : (
               <div className="text-center py-24">
                 <p className="text-muted mb-4">No purchases yet</p>
-                <Link href="/shop" className="text-accent font-bold uppercase tracking-wider">
-                  Browse the shop →
-                </Link>
+                <Link href="/shop" className="text-accent font-bold uppercase tracking-wider">Browse the shop →</Link>
               </div>
             )}
           </div>
         )}
 
+        {/* SAVED TAB */}
         {activeTab === 'saved' && (
           <div>
             {isLoadingSaves ? (
@@ -531,45 +460,16 @@ export default function ProfilePage() {
                   >
                     <Link href={`/listing/${listing.id}`}>
                       <div className="group bg-card border border-border hover:border-foreground transition-colors overflow-hidden">
-                        {/* Image */}
                         <div className="aspect-[5/5] overflow-hidden bg-background">
                           {listing.img_urls && listing.img_urls.length > 0 ? (
-                            <img 
-                              src={listing.img_urls[0]} 
-                              alt={listing.product_name}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            />
+                            <img src={listing.img_urls[0]} alt={listing.product_name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"/>
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-muted">
-                              No Image
-                            </div>
+                            <div className="w-full h-full flex items-center justify-center text-muted">No Image</div>
                           )}
                         </div>
-                        
-                        {/* Info */}
                         <div className="p-4">
-                          <div className="flex items-start justify-between gap-2 mb-2">
-                            <h3 className="font-bold text-lg leading-tight line-clamp-1">
-                              {listing.product_name}
-                            </h3>
-                            {listing.sold && (
-                              <span className="text-xs bg-red-500/20 text-red-400 px-2 py-1 uppercase font-mono">
-                                Sold
-                              </span>
-                            )}
-                          </div>
-                          
-                          <p className="text-sm text-muted mb-3 line-clamp-2">
-                            {truncateDescription(listing.description)}
-                          </p>
-                          
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-lg">{listing.price} SOL</span>
-                            <div className="flex gap-2 text-xs text-muted">
-                              {listing.size && <span>{listing.size}</span>}
-                              {listing.category && <span>• {listing.category}</span>}
-                            </div>
-                          </div>
+                          <h3 className="font-bold text-lg leading-tight line-clamp-1 mb-2">{listing.product_name}</h3>
+                          <span className="font-bold text-lg">{listing.price} SOL</span>
                         </div>
                       </div>
                     </Link>
@@ -579,9 +479,7 @@ export default function ProfilePage() {
             ) : (
               <div className="text-center py-24">
                 <p className="text-muted mb-4">No saved items yet</p>
-                <Link href="/shop" className="text-accent font-bold uppercase tracking-wider">
-                  Browse the shop →
-                </Link>
+                <Link href="/shop" className="text-accent font-bold uppercase tracking-wider">Browse the shop →</Link>
               </div>
             )}
           </div>
@@ -652,7 +550,6 @@ export default function ProfilePage() {
                     {settingsTab === 'personal' && (
                       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
                         
-                        {/* UPDATED: Split Input Fields */}
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <label className="font-mono text-xs uppercase tracking-wider text-muted">First Name</label>
