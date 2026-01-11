@@ -25,6 +25,10 @@ export default function ShopPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [allListings, setAllListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [offset, setOffset] = useState(0);
+  const LIMIT = 20;
   const { publicKey } = useWallet();
 
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -34,50 +38,70 @@ export default function ShopPage() {
   const searchParams = useSearchParams();
 
   // Fetch listings from backend
-  useEffect(() => {
-    const fetchListings = async () => {
-      if (!publicKey) {
-        setLoading(false);
-        return;
-      }
+  const fetchListings = async (
+    currentOffset: number,
+    append: boolean = false
+  ) => {
+    if (append) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
 
-      try {
-        const response = await fetch(
-          `http://localhost:5000/api/get-listings-user?wallet_id=${publicKey.toBase58()}`
+    try {
+      const walletParam = publicKey ? `&wallet_id=${publicKey.toBase58()}` : "";
+      const response = await fetch(
+        `http://localhost:5000/api/get-listings-user?offset=${currentOffset}&limit=${LIMIT}${walletParam}`
+      );
+      const data = await response.json();
+
+      if (data.recommendations) {
+        // Map API response to listing format
+        const listings: Listing[] = data.recommendations.map(
+          (item: {
+            id: string;
+            product_name: string;
+            img_url: string;
+            price: number;
+            size: string;
+            category: string;
+            seller: string;
+          }) => ({
+            id: item.id,
+            title: item.product_name,
+            price: item.price,
+            image: Array.isArray(item.img_url) ? item.img_url[0] : item.img_url,
+            size: item.size || "OS",
+            seller: item.seller || "Unknown",
+            category: item.category,
+          })
         );
-        const data = await response.json();
 
-        if (data.recommendations) {
-          // Map API response to listing format
-          const listings: Listing[] = data.recommendations.map(
-            (item: {
-              id: string;
-              product_name: string;
-              img_url: string;
-              price: number;
-              category: string;
-              similarity_score: number;
-            }) => ({
-              id: item.id,
-              title: item.product_name,
-              price: item.price,
-              image: item.img_url,
-              size: "OS", // Default size since API doesn't return it
-              seller: "Unknown", // Default seller since API doesn't return it
-              category: item.category,
-            })
-          );
+        if (append) {
+          setAllListings((prev) => [...prev, ...listings]);
+        } else {
           setAllListings(listings);
         }
-      } catch (error) {
-        console.error("Failed to fetch listings:", error);
-      } finally {
-        setLoading(false);
+        setHasMore(data.has_more);
       }
-    };
+    } catch (error) {
+      console.error("Failed to fetch listings:", error);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  };
 
-    fetchListings();
+  useEffect(() => {
+    setOffset(0);
+    fetchListings(0, false);
   }, [publicKey]);
+
+  const handleLoadMore = () => {
+    const newOffset = offset + LIMIT;
+    setOffset(newOffset);
+    fetchListings(newOffset, true);
+  };
 
   useEffect(() => {
     const catParam = searchParams?.get("category");
@@ -254,15 +278,7 @@ export default function ShopPage() {
         {/* Listings grid */}
         {loading ? (
           <div className="mt-8 w-full text-center">
-            <p className="text-muted text-lg font-mono">
-              Loading recommendations...
-            </p>
-          </div>
-        ) : !publicKey ? (
-          <div className="mt-8 w-full text-center">
-            <p className="text-muted text-lg font-mono">
-              Connect your wallet to see personalized recommendations
-            </p>
+            <p className="text-muted text-lg font-mono">Loading listings...</p>
           </div>
         ) : filteredListings.length === 0 ? (
           <div className="mt-8 w-full text-center">
@@ -277,11 +293,17 @@ export default function ShopPage() {
         )}
 
         {/* Load more */}
-        <div className="flex justify-center mt-16">
-          <button className="px-12 py-4 border-2 border-foreground font-bold uppercase tracking-wider hover:bg-foreground hover:text-background transition-colors">
-            Load More
-          </button>
-        </div>
+        {hasMore && !loading && filteredListings.length > 0 && (
+          <div className="flex justify-center mt-16">
+            <button
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              className="px-12 py-4 border-2 border-foreground font-bold uppercase tracking-wider hover:bg-foreground hover:text-background transition-colors disabled:opacity-50"
+            >
+              {loadingMore ? "Loading..." : "Load More"}
+            </button>
+          </div>
+        )}
       </section>
 
       <Footer />

@@ -1,95 +1,74 @@
-'use client';
+"use client";
 
-import { Navbar } from '@/components/Navbar';
-import { Footer } from '@/components/Footer';
-import { ListingCard } from '@/components/ListingCard';
-import { CategoryNav } from '@/components/CategoryNav';
-import { StatsBar } from '@/components/StatsBar';
-import { motion } from 'framer-motion';
-import { ArrowRight, Sparkles } from 'lucide-react';
-import Link from 'next/link';
+import { Navbar } from "@/components/Navbar";
+import { Footer } from "@/components/Footer";
+import { ListingCard } from "@/components/ListingCard";
+import { CategoryNav } from "@/components/CategoryNav";
+import { StatsBar } from "@/components/StatsBar";
+import { motion } from "framer-motion";
+import { ArrowRight, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { useState, useEffect } from "react";
 
-// Dummy listings data
-const dummyListings = [
-  {
-    id: '1',
-    title: 'Vintage Nike Windbreaker',
-    price: 0.5,
-    image: 'https://picsum.photos/seed/nike1/400/500',
-    size: 'L',
-    seller: 'DemoWallet123abc456',
-    category: 'Outerwear'
-  },
-  {
-    id: '2',
-    title: 'Carhartt WIP Beanie',
-    price: 0.15,
-    image: 'https://picsum.photos/seed/carhartt/400/500',
-    size: 'OS',
-    seller: 'DemoWallet789xyz',
-    category: 'Accessories'
-  },
-  {
-    id: '3',
-    title: 'Levis 501 Vintage Wash',
-    price: 0.8,
-    image: 'https://picsum.photos/seed/levis501/400/500',
-    size: '32',
-    seller: 'SellerABC123',
-    category: 'Bottoms'
-  },
-  {
-    id: '4',
-    title: 'Stüssy Logo Tee',
-    price: 0.25,
-    image: 'https://picsum.photos/seed/stussy/400/500',
-    size: 'M',
-    seller: 'StussyFan99',
-    category: 'Tops'
-  },
-  {
-    id: '5',
-    title: 'New Balance 550',
-    price: 1.2,
-    image: 'https://picsum.photos/seed/nb550/400/500',
-    size: '10',
-    seller: 'SneakerHead42',
-    category: 'Shoes'
-  },
-  {
-    id: '6',
-    title: 'Chrome Hearts Ring',
-    price: 2.5,
-    image: 'https://picsum.photos/seed/chrome/400/500',
-    size: '9',
-    seller: 'LuxuryVintage',
-    category: 'Accessories'
-  },
-  {
-    id: '7',
-    title: 'Kapital Bandana Jacket',
-    price: 3.2,
-    image: 'https://picsum.photos/seed/kapital/400/500',
-    size: 'XL',
-    seller: 'JapanArchive',
-    category: 'Outerwear'
-  },
-  {
-    id: '8',
-    title: 'Maison Margiela Tabi',
-    price: 4.0,
-    image: 'https://picsum.photos/seed/margiela/400/500',
-    size: '42',
-    seller: 'DesignerGrails',
-    category: 'Shoes'
-  },
-];
+interface Listing {
+  id: string;
+  title: string;
+  price: number;
+  image: string;
+  size: string;
+  seller: string;
+  category: string;
+}
 
 export default function Home() {
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchListings = async () => {
+      try {
+        const response = await fetch(
+          "http://localhost:5000/api/get-recent-listings"
+        );
+        const data = await response.json();
+
+        if (data.listings) {
+          const mappedListings: Listing[] = data.listings.map(
+            (item: {
+              id: string;
+              product_name: string;
+              img_urls: string[];
+              price: number;
+              size: string;
+              category: string;
+              wallet_address: string;
+            }) => ({
+              id: item.id,
+              title: item.product_name,
+              price: item.price,
+              image: Array.isArray(item.img_urls)
+                ? item.img_urls[0]
+                : item.img_urls,
+              size: item.size,
+              seller: item.wallet_address,
+              category: item.category,
+            })
+          );
+          setListings(mappedListings);
+        }
+      } catch (error) {
+        console.error("Failed to fetch listings:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchListings();
+  }, []);
   return (
     <main className="min-h-screen">
       <Navbar />
-      
+
       {/* Hero Section - Editorial style */}
       <section className="relative min-h-[70vh] flex items-center overflow-hidden">
         {/* Asymmetric layout */}
@@ -107,36 +86,41 @@ export default function Home() {
                   Now Live on Devnet
                 </p>
                 <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold leading-[0.9] tracking-tight">
-                  TRADE<br />
-                  <span className="text-muted">FASHION</span><br />
+                  TRADE
+                  <br />
+                  <span className="text-muted">FASHION</span>
+                  <br />
                   ON-CHAIN
                 </h1>
               </motion.div>
 
-              <motion.p 
+              <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3 }}
                 className="text-muted text-lg max-w-md"
               >
-                The peer-to-peer marketplace for streetwear, vintage, and designer fashion. 
-                Pay with SOL. No middleman. No crazy fees.
+                The peer-to-peer marketplace for streetwear, vintage, and
+                designer fashion. Pay with SOL. No middleman. No crazy fees.
               </motion.p>
 
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 }}
                 className="flex flex-col sm:flex-row gap-4"
               >
-                <Link 
+                <Link
                   href="/shop"
                   className="group inline-flex items-center justify-center gap-3 bg-foreground text-background px-8 py-4 font-bold uppercase tracking-wider hover:gap-5 transition-all"
                 >
                   Start Shopping
-                  <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                  <ArrowRight
+                    size={20}
+                    className="group-hover:translate-x-1 transition-transform"
+                  />
                 </Link>
-                <Link 
+                <Link
                   href="/sell"
                   className="inline-flex items-center justify-center gap-3 border-2 border-foreground px-8 py-4 font-bold uppercase tracking-wider hover:bg-foreground hover:text-background transition-colors"
                 >
@@ -153,8 +137,8 @@ export default function Home() {
                 transition={{ delay: 0.2, duration: 0.6 }}
                 className="absolute top-0 right-0 w-[280px] h-[380px] bg-card border border-border shadow-2xl overflow-hidden stack-card"
               >
-                <img 
-                  src="https://picsum.photos/seed/hero1/400/500" 
+                <img
+                  src="https://picsum.photos/seed/hero1/400/500"
                   alt="Featured item"
                   className="w-full h-full object-cover"
                 />
@@ -169,8 +153,8 @@ export default function Home() {
                 transition={{ delay: 0.4, duration: 0.6 }}
                 className="absolute top-20 right-60 w-[240px] h-[320px] bg-card border border-border shadow-2xl overflow-hidden stack-card"
               >
-                <img 
-                  src="https://picsum.photos/seed/hero2/400/500" 
+                <img
+                  src="https://picsum.photos/seed/hero2/400/500"
                   alt="Featured item"
                   className="w-full h-full object-cover"
                 />
@@ -185,8 +169,8 @@ export default function Home() {
                 transition={{ delay: 0.6, duration: 0.6 }}
                 className="absolute bottom-0 right-32 w-[200px] h-[260px] bg-card border border-border shadow-2xl overflow-hidden stack-card"
               >
-                <img 
-                  src="https://picsum.photos/seed/hero3/400/500" 
+                <img
+                  src="https://picsum.photos/seed/hero3/400/500"
                   alt="Featured item"
                   className="w-full h-full object-cover"
                 />
@@ -210,9 +194,11 @@ export default function Home() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
           <div>
             <h2 className="text-3xl md:text-4xl font-bold">Fresh Listings</h2>
-            <p className="text-muted mt-2">Just dropped. Grab them before they&apos;re gone.</p>
+            <p className="text-muted mt-2">
+              Just dropped. Grab them before they&apos;re gone.
+            </p>
           </div>
-          <Link 
+          <Link
             href="/shop"
             className="text-sm font-mono uppercase tracking-wider border-b-2 border-foreground pb-1 hover:border-accent hover:text-accent transition-colors"
           >
@@ -222,11 +208,23 @@ export default function Home() {
 
         <CategoryNav />
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 mt-8">
-          {dummyListings.map((listing, i) => (
-            <ListingCard key={listing.id} listing={listing} index={i} />
-          ))}
-        </div>
+        {loading ? (
+          <div className="mt-8 w-full text-center">
+            <p className="text-muted text-lg font-mono">Loading listings...</p>
+          </div>
+        ) : listings.length === 0 ? (
+          <div className="mt-8 w-full text-center">
+            <p className="text-muted text-lg font-mono">
+              No listings available
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 mt-8">
+            {listings.map((listing, i) => (
+              <ListingCard key={listing.id} listing={listing} index={i} />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* CTA Section */}
@@ -237,10 +235,10 @@ export default function Home() {
               Ready to sell your closet?
             </h2>
             <p className="text-foreground/70 text-xl mt-6 mb-8">
-              List your items in seconds. Get paid in SOL instantly when they sell. 
-              No fees, no waiting, no BS.
+              List your items in seconds. Get paid in SOL instantly when they
+              sell. No fees, no waiting, no BS.
             </p>
-            <Link 
+            <Link
               href="/sell"
               className="inline-flex items-center gap-3 bg-foreground text-background px-8 py-4 font-bold uppercase tracking-wider hover:gap-5 transition-all"
             >

@@ -208,6 +208,9 @@ def turn_to_vector():
 @app.route('/api/get-listings-user', methods=['GET'])
 def obtain_shop_listings():
     wallet_id = request.args.get("wallet_id")
+    offset = int(request.args.get("offset", 0))
+    limit = int(request.args.get("limit", 20))
+    
     connection = psycopg2.connect(
                 user=USER,
                 password=PASSWORD,
@@ -216,51 +219,76 @@ def obtain_shop_listings():
                 dbname=DBNAME
         )
     cursor = connection.cursor()
-    cursor.execute("""
-    SELECT id, product_name, img_urls, price, category, vector
-    FROM "Listings"
-    WHERE sold = False
-    """)
-    listing_list = cursor.fetchall()
-    cursor.execute("""
-    SELECT "Taste-vector"
-    FROM "Userbase"
-    WHERE id = %s
-    """, (wallet_id,))
-    user_vec = cursor.fetchone()
-
     
-    user_vector = user_vec[0]  # Extract the vector from the tuple
-    
-    # Dictionary comprehension with similarity scores
-    # Convert img_urls list to tuple to make it hashable
-    similarities = {
-        (listing[0], listing[1], tuple(listing[2]) if isinstance(listing[2], list) else listing[2], listing[3], listing[4]): euclidean(user_vector, listing[5])
-        for listing in listing_list
-    }
-    
-    # Sort dictionary by values (euclidean distances - smaller is more similar)
-    sorted_recommendations = dict(sorted(similarities.items(), key=lambda item: item[1]))
-    
-    cursor.close()
-    connection.close()
-    
-    # Convert to a more readable format for the frontend
-    recommendations = [
-        {
-            "id": key[0],
-            "product_name": key[1],
-            "img_url": list(key[2]) if isinstance(key[2], tuple) else key[2], 
-            "price": key[3],
-            "category": key[4],
-            "similarity_score": value
-        }
-        for key, value in sorted_recommendations.items()
-    ]
-    
-    print(recommendations)
-
-    return jsonify({"recommendations": recommendations})
+    try:
+        # Check if user has a taste vector
+        user_vector = None
+        if wallet_id:
+            cursor.execute("""
+            SELECT "Taste-vector"
+            FROM "Userbase"
+            WHERE id = %s
+            """, (wallet_id,))
+            user_vec = cursor.fetchone()
+            if user_vec and user_vec[0]:
+                user_vector = user_vec[0]
+        
+        # Get all unsold listings
+        cursor.execute("""
+        SELECT id, product_name, img_urls, price, size, category, wallet_address, vector
+        FROM "Listings"
+        WHERE sold = False
+        ORDER BY created_at DESC
+        """)
+        listing_list = cursor.fetchall()
+        
+        # If user has a taste vector, sort by similarity
+        if user_vector:
+            # Filter out listings without vectors and sort by similarity
+            listings_with_vectors = [l for l in listing_list if l[7] is not None]
+            listings_without_vectors = [l for l in listing_list if l[7] is None]
+            
+            # Calculate similarities for listings with vectors
+            similarities = []
+            for listing in listings_with_vectors:
+                score = euclidean(user_vector, listing[7])
+                similarities.append((listing, score))
+            
+            # Sort by similarity (lower = more similar)
+            similarities.sort(key=lambda x: x[1])
+            
+            # Combine sorted listings with those without vectors at the end
+            sorted_listings = [item[0] for item in similarities] + listings_without_vectors
+        else:
+            # No taste vector, use recent order (already sorted by created_at DESC)
+            sorted_listings = listing_list
+        
+        # Apply pagination
+        paginated_listings = sorted_listings[offset:offset + limit]
+        has_more = len(sorted_listings) > offset + limit
+        
+        # Convert to a more readable format for the frontend
+        recommendations = [
+            {
+                "id": str(listing[0]),
+                "product_name": listing[1],
+                "img_url": listing[2][0] if isinstance(listing[2], list) and listing[2] else listing[2],
+                "price": listing[3],
+                "size": listing[4],
+                "category": listing[5],
+                "seller": listing[6]
+            }
+            for listing in paginated_listings
+        ]
+        
+        return jsonify({
+            "recommendations": recommendations,
+            "has_more": has_more,
+            "total": len(sorted_listings)
+        })
+    finally:
+        cursor.close()
+        connection.close()
 
 
 @app.route('/api/add-like', methods=['PUT'])
@@ -394,6 +422,48 @@ def adjust_taste_with_unsave():
 
         connection.commit()
         return jsonify({"vector": updated_vec})
+    finally:
+        cursor.close()
+        connection.close()
+
+
+@app.route('/api/get-recent-listings', methods=['GET'])
+def get_recent_listings():
+    """Get first 10 unsold listings for landing page"""
+    connection = psycopg2.connect(
+        user=USER,
+        password=PASSWORD,
+        host=HOST,
+        port=PORT,
+        dbname=DBNAME
+    )
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute("""
+        SELECT id, product_name, img_urls, price, size, condition, category, wallet_address
+        FROM "Listings"
+        WHERE sold = False
+        ORDER BY created_at DESC
+        LIMIT 10
+        """)
+        listings = cursor.fetchall()
+
+        result = [
+            {
+                "id": str(listing[0]),
+                "product_name": listing[1],
+                "img_urls": listing[2],
+                "price": listing[3],
+                "size": listing[4],
+                "condition": listing[5],
+                "category": listing[6],
+                "wallet_address": listing[7]
+            }
+            for listing in listings
+        ]
+
+        return jsonify({"listings": result})
     finally:
         cursor.close()
         connection.close()
