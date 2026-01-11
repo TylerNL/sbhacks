@@ -3,3 +3,9 @@ flask_cors
 google.generativeai
 requests
 python-dotenv
+torch
+torchvision
+numpy
+dotenv
+requests
+psycopg2
