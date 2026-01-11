@@ -238,5 +238,10 @@ def health_check():
     return jsonify({"status": "healthy", "service": "financial-coach-api"})
 
 
+"""@app.route("/api/user/<user_id>/listings", methods=["GET"])
+def user_listings(user_id):"""
+    
+
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
