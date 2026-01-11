@@ -120,7 +120,7 @@ export default function Home() {
                 className="text-muted text-lg max-w-md"
               >
                 The peer-to-peer marketplace for streetwear, vintage, and designer fashion. 
-                Pay with SOL. No middleman. No fees.
+                Pay with SOL. No middleman. No crazy fees.
               </motion.p>
 
               <motion.div 
