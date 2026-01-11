@@ -6,7 +6,8 @@ import { ListingCard } from '@/components/ListingCard';
 import { CategoryNav } from '@/components/CategoryNav';
 import { motion } from 'framer-motion';
 import { Search, SlidersHorizontal } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 const allListings = [
   { id: '1', title: 'Vintage Nike Windbreaker', price: 0.5, image: 'https://picsum.photos/seed/nike1/400/500', size: 'L', seller: 'DemoWallet123abc456', category: 'Outerwear' },
@@ -27,6 +28,40 @@ export default function ShopPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const categories = Array.from(new Set(allListings.map(l => l.category))).sort();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const catParam = searchParams?.get('category');
+    if (!catParam) return;
+    if (catParam === 'all') {
+      setSelectedCategories([]);
+      return;
+    }
+
+    // Try to find a matching category by name (case-insensitive)
+    const match = categories.find(c => c.toLowerCase() === catParam.toLowerCase());
+    if (match) {
+      setSelectedCategories([match]);
+    } else {
+      // If there's no matching category in our listings, set the param as the selected
+      // category so the filter yields no results (shows nothing) which is the desired behavior.
+      setSelectedCategories([catParam]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams?.toString()]);
+
+  const toggleCategory = (cat: string) => {
+    setSelectedCategories(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]);
+  };
+
+  const filteredListings = allListings.filter(listing => {
+    const matchesSearch = searchQuery.trim() === '' || listing.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(listing.category);
+    return matchesSearch && matchesCategory;
+  });
+
   return (
     <main className="min-h-screen">
       <Navbar />
@@ -40,7 +75,7 @@ export default function ShopPage() {
         >
           <h1 className="text-5xl md:text-6xl font-bold tracking-tight">SHOP</h1>
           <p className="text-muted mt-4 text-lg">
-            {allListings.length} items available
+            {filteredListings.length} of {allListings.length} items available
           </p>
         </motion.div>
 
@@ -113,6 +148,24 @@ export default function ShopPage() {
                 </select>
               </div>
             </div>
+
+            {/* Category multi-select */}
+            <div className="mt-6">
+              <label className="text-xs font-mono uppercase tracking-wider text-muted mb-2 block">Categories</label>
+              <div className="flex flex-wrap gap-2">
+                {categories.map((cat) => (
+                  <label key={cat} className={`inline-flex items-center px-3 py-2 border transition-colors duration-150 ${selectedCategories.includes(cat) ? 'bg-black text-white border-black' : 'bg-transparent border-border hover:border-foreground'} rounded cursor-pointer`}>
+                    <input
+                      type="checkbox"
+                      className="mr-2"
+                      checked={selectedCategories.includes(cat)}
+                      onChange={() => toggleCategory(cat)}
+                    />
+                    <span className="text-sm font-mono">{cat}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
           </motion.div>
         )}
 
@@ -120,11 +173,17 @@ export default function ShopPage() {
         <CategoryNav />
 
         {/* Listings grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 mt-8">
-          {allListings.map((listing, i) => (
-            <ListingCard key={listing.id} listing={listing} index={i} />
-          ))}
-        </div>
+        {filteredListings.length === 0 ? (
+          <div className="mt-8 w-full text-center">
+            <p className="text-muted text-lg font-mono">No Items Found</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 mt-8">
+            {filteredListings.map((listing, i) => (
+              <ListingCard key={listing.id} listing={listing} index={i} />
+            ))}
+          </div>
+        )}
 
         {/* Load more */}
         <div className="flex justify-center mt-16">

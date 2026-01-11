@@ -3,7 +3,6 @@
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { ListingCard } from '@/components/ListingCard';
-import { FeaturedDrop } from '@/components/FeaturedDrop';
 import { CategoryNav } from '@/components/CategoryNav';
 import { StatsBar } from '@/components/StatsBar';
 import { motion } from 'framer-motion';
@@ -205,9 +204,6 @@ export default function Home() {
 
       {/* Stats */}
       <StatsBar />
-
-      {/* Featured Drop */}
-      <FeaturedDrop />
 
       {/* Listings Grid */}
       <section className="max-w-[1800px] mx-auto px-6 py-24">
