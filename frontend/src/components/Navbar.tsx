@@ -119,7 +119,7 @@ export function Navbar() {
                 </div>
               )}
 
-              <WalletMultiButton />
+              <WalletMultiButton className="!bg-black !text-white !border !border-white/20 hover:!bg-neutral-900 !rounded-full !px-4 !py-2 !h-auto" />
 
               {publicKey && (
                 <button

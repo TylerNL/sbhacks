@@ -32,7 +32,7 @@
 }
 
 * {
-  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='3' fill='%23ff4d00'/%3E%3C/svg%3E"), auto;
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='3' fill='%23ff4d00'/%3E%3C/svg%3E"), auto;
 }
 
 body {
@@ -127,13 +127,19 @@ body {
 
 /* Solana wallet adapter overrides */
 .wallet-adapter-button {
-  background: var(--foreground) !important;
-  color: var(--background) !important;
-  border-radius: 0 !important;
+  background: #000 !important;
+  color: #fff !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 9999px !important;
   font-family: var(--font-mono), monospace !important;
   text-transform: uppercase !important;
   font-size: 12px !important;
   letter-spacing: 0.1em !important;
+  padding: 0.5rem 1rem !important;
+}
+
+.wallet-adapter-button:not([disabled]):hover {
+  background: #111 !important;
 }
 
 .wallet-adapter-modal-wrapper {
