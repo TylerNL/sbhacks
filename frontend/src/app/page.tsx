@@ -200,10 +200,7 @@ export default function Home() {
 
         {/* Background accent */}
         <div className="absolute top-1/2 right-0 w-1/3 h-[600px] bg-accent/5 -skew-x-12 -z-10" />
-      </section>
-
-      {/* Stats */}
-      <StatsBar />
+      </section>  
 
       {/* Listings Grid */}
       <section className="max-w-[1800px] mx-auto px-6 py-24">

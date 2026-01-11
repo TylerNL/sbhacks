@@ -6,22 +6,22 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';   // ✅ Correct
+import { supabase } from '@/lib/supabase';   
 
 export function Navbar() {
   const { publicKey } = useWallet();
   const pathname = usePathname();
   const router = useRouter();
 
-  const [firstName, setFirstName] = useState<string | null>(null);
-  const [lastInitial, setLastInitial] = useState<string | null>(null);
-  const [initials, setInitials] = useState<string | null>(null);
+  const [firstName, setFirstName] = useState<string>('');
+  const [lastInitial, setLastInitial] = useState<string>('');
+  const [initials, setInitials] = useState<string>('U');
 
   useEffect(() => {
     if (!publicKey) {
-      setFirstName(null);
-      setLastInitial(null);
-      setInitials(null);
+      setFirstName('');
+      setLastInitial('');
+      setInitials('');
       return;
     }
 
@@ -30,7 +30,7 @@ export function Navbar() {
 
       // Try common table / column names — adjust if your DB uses different names
       let { data, error } = await supabase
-        .from('profiles')
+        .from('Userbase')
         .select('first_name,last_name')
         .eq('id', address)
         .single();
@@ -38,7 +38,7 @@ export function Navbar() {
       if (error || !data) {
         // fallback: try 'address' column on profiles
         const res = await supabase
-          .from('profiles')
+          .from('Userbase')
           .select('first_name,last_name')
           .eq('address', address)
           .single();
@@ -48,7 +48,7 @@ export function Navbar() {
         } else {
           // fallback: try 'users' table
           const res2 = await supabase
-            .from('users')
+            .from('Userbase')
             .select('first_name,last_name')
             .eq('wallet_address', address)
             .single();
@@ -111,7 +111,7 @@ export function Navbar() {
               {publicKey && (
                 <div className="hidden sm:flex items-center gap-3 mr-2">
                   <div className="w-8 h-8 rounded-full bg-accent text-background flex items-center justify-center font-bold">
-                    {initials || 'U'}
+                    {initials}
                   </div>
                   {firstName && (
                     <span className="text-sm font-medium">Hi, {firstName} {lastInitial}</span>

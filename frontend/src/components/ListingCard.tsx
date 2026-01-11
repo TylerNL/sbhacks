@@ -66,7 +66,7 @@ export function ListingCard({ listing, index = 0 }: { listing: Listing; index?: 
       <div className="mt-3 space-y-1">
         <div className="flex justify-between items-start gap-2">
           <h3 className="text-sm font-medium truncate flex-1">{listing.title}</h3>
-          <span className="text-sm font-bold whitespace-nowrap">{listing.price} SOL</span>
+          <span className="text-sm font-bold whitespace-nowrap">{listing.price} SOL / {(listing.price*135.87).toFixed(2)} USD </span>
         </div>
         <p className="text-xs text-muted uppercase tracking-wider">{listing.category}</p>
       </div>
