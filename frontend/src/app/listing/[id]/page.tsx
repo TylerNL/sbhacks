@@ -340,9 +340,10 @@ export default function ListingPage() {
             <div className="flex items-baseline gap-4">
               <span className="text-5xl font-bold">{listing.price}</span>
               <span className="text-2xl text-muted">SOL</span>
+              <span className="text-m text-muted">(<span className="text-m font-bold">{(listing.price * 135.87).toFixed(2)}</span>&nbsp;<span className="text-m text-muted">USD</span>)</span>
             </div>
 
-            {/* Quick info */}
+            {/* Quick info */}  
             <div className="flex gap-6 py-6 border-y border-border">
               {listing.size && (
                 <div>

@@ -426,7 +426,7 @@ export default function ProfilePage() {
                             <h3 className="font-bold text-lg leading-tight line-clamp-1">{listing.product_name}</h3>
                             <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 uppercase font-mono">Purchased</span>
                           </div>
-                          <span className="font-bold text-lg">{listing.price} SOL</span>
+                          <span className="font-bold text-lg">{listing.price} SOL / {(listing.price *135.87).toFixed(2)} USD</span>
                         </div>
                       </div>
                     </Link>
