@@ -130,7 +130,9 @@ export function SignUpCard() {
           throw new Error(`Failed to create user (${res.status}): ${text}`);
         }
       } catch (err) {
-        setSaveError(err instanceof Error ? err.message : "Failed to create user");
+        setSaveError(
+          err instanceof Error ? err.message : "Failed to create user"
+        );
         return;
       } finally {
         setSaving(false);

@@ -1,17 +1,24 @@
 from flask import Flask, request, jsonify, abort
 from flask_cors import CORS
-import google.generativeai as genai
 import os
 import requests
 from dotenv import load_dotenv
 from datetime import datetime
 import uuid
 import psycopg2
+import torch
+from torchvision import models, transforms
+import torch.nn as nn
+from io import BytesIO
+from PIL import Image
 
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
+
+MODEL_PATH = "./recommender/accurate_style_model.pth"  
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 USER = os.getenv("user")
 PASSWORD = os.getenv("password")
@@ -20,63 +27,33 @@ PORT = os.getenv("port")
 DBNAME = os.getenv("dbname")
 
 
-# Configure Gemini API
-GEMINI_KEY = os.getenv("GEMINI_API_KEY")
-if GEMINI_KEY:
-    genai.configure(api_key=GEMINI_KEY)
-    model = genai.GenerativeModel("gemini-1.5-flash")
-else:
-    model = None
 
 PINATA_API_KEY = os.getenv("PINATA_API_KEY")
 PINATA_SECRET_KEY = os.getenv("PINATA_SECRET_KEY")
 
-# ============================================
-# MARKETPLACE LISTINGS (In-Memory Storage)
-# ============================================
+def load_engine():
+    # Architecture must match training EXACTLY
+    model = models.efficientnet_v2_s(weights=None)
+    model.classifier = nn.Identity()
+    
+    # Load weights
+    try:
+        model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
+    except:
+        return None, None
+        
+    model.to(device)
+    model.eval()
+    return model
 
-listings = [
-    {
-        "id": "1",
-        "title": "Vintage Nike Windbreaker",
-        "description": "90s vintage Nike windbreaker in excellent condition",
-        "price": 0.5,
-        "size": "L",
-        "category": "Outerwear",
-        "condition": "Good",
-        "image": "https://picsum.photos/seed/nike1/400/500",
-        "seller": "DemoWallet123abc456def789",
-        "status": "active",
-        "created_at": datetime.now().isoformat()
-    },
-    {
-        "id": "2",
-        "title": "Carhartt WIP Beanie",
-        "description": "Brand new with tags Carhartt beanie",
-        "price": 0.15,
-        "size": "One Size",
-        "category": "Accessories",
-        "condition": "New with tags",
-        "image": "https://picsum.photos/seed/carhartt/400/500",
-        "seller": "DemoWallet789xyz",
-        "status": "active",
-        "created_at": datetime.now().isoformat()
-    },
-    {
-        "id": "3",
-        "title": "Levis 501 Vintage Wash",
-        "description": "Classic fit 501s with beautiful vintage fade",
-        "price": 0.8,
-        "size": "32",
-        "category": "Bottoms",
-        "condition": "Good",
-        "image": "https://picsum.photos/seed/levis501/400/500",
-        "seller": "SellerABC123",
-        "status": "active",
-        "created_at": datetime.now().isoformat()
-    },
-]
+transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
 
+
+model = load_engine()
 
 @app.route('/api/listings', methods=['GET'])
 def get_listings():
@@ -189,6 +166,32 @@ def mark_sold(listing_id):
 # IPFS IMAGE UPLOAD (Pinata)
 # ============================================
 
+@app.route('/api/vectorize', methods=['POST'])
+def turn_to_vector():
+    img_add = request.args.get("img_address")
+    id = request.args.get("id")
+    img = Image.open(BytesIO(img_add.content)).convert("RGB")
+    t_img = transform(img).unsqueeze(0).to(device)
+                    
+    with torch.no_grad():
+        vec = model(t_img).cpu().numpy().flatten()
+    
+    connection = psycopg2.connect(
+                user=USER,
+                password=PASSWORD,
+                host=HOST,
+                port=PORT,
+                dbname=DBNAME
+        )
+    cursor = connection.cursor()
+    cursor.execute("""
+    UPDATE "Listings"
+    SET vector = %s
+    WHERE id = %s
+    """, (vec, id))
+
+    return jsonify({"vector": vec})
+
 @app.route('/api/upload', methods=['POST'])
 def upload_to_ipfs():
     """
@@ -280,13 +283,6 @@ def upload_metadata_to_ipfs():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/users", methods=["GET"])
-def list_users():
-    """List all available demo users."""
-    users = get_all_users()
-    return jsonify({
-        "users": [{"id": u["id"], "name": u["name"], "credit_score": u["credit_score"]} for u in users]
-    })
 
 
 @app.route("/api/user/<user_id>", methods=["GET"])
