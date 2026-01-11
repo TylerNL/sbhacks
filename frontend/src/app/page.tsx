@@ -102,10 +102,6 @@ export default function Home() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6 }}
               >
-                <p className="text-accent font-mono text-sm tracking-[0.3em] uppercase mb-4 flex items-center gap-2">
-                  <Sparkles size={14} />
-                  Now Live on Devnet
-                </p>
                 <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold leading-[0.9] tracking-tight">
                   TRADE<br />
                   <span className="text-muted">FASHION</span><br />
@@ -128,7 +124,7 @@ export default function Home() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 }}
                 className="flex flex-col sm:flex-row gap-4"
-              >
+              > 
                 <Link 
                   href="/shop"
                   className="group inline-flex items-center justify-center gap-3 bg-foreground text-background px-8 py-4 font-bold uppercase tracking-wider hover:gap-5 transition-all"
