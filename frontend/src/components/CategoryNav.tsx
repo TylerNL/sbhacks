@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 const categories = [
   { name: 'ALL', slug: 'all', emoji: '✦' },
@@ -13,7 +14,10 @@ const categories = [
   { name: 'BAGS', slug: 'bags', emoji: '👜' },
 ];
 
-export function CategoryNav({ active = 'all' }: { active?: string }) {
+export function CategoryNav({ active }: { active?: string }) {
+  const searchParams = useSearchParams();
+  const current = active ?? (searchParams?.get('category') ?? 'all');
+
   return (
     <div className="overflow-x-auto scrollbar-hide">
       <div className="flex gap-2 min-w-max py-2">
@@ -27,8 +31,8 @@ export function CategoryNav({ active = 'all' }: { active?: string }) {
               whileTap={{ scale: 0.95 }}
               className={`
                 px-5 py-3 border transition-all
-                ${active === cat.slug 
-                  ? 'bg-foreground text-background border-foreground' 
+                ${current === cat.slug 
+                  ? 'bg-black text-white border-black' 
                   : 'bg-transparent border-border hover:border-foreground'
                 }
               `}

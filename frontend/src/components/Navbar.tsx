@@ -101,6 +101,7 @@ export function Navbar() {
               >
                 DROPS
               </Link>
+              
             </div>
           </motion.div>
         )}

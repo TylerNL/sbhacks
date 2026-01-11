@@ -24,7 +24,7 @@ export function Footer() {
           <div>
             <h3 className="font-mono text-xs tracking-widest text-background/50 mb-6">MARKETPLACE</h3>
             <ul className="space-y-3">
-              {['Shop All', 'Trending', 'New Arrivals', 'Drops'].map((item) => (
+              {['Shop All', 'Trending'].map((item) => (
                 <li key={item}>
                   <Link href="#" className="text-sm hover:text-accent transition-colors">
                     {item}
@@ -37,7 +37,7 @@ export function Footer() {
           <div>
             <h3 className="font-mono text-xs tracking-widest text-background/50 mb-6">SELL</h3>
             <ul className="space-y-3">
-              {['List an Item', 'Seller Guide', 'Fees', 'Verification'].map((item) => (
+              {['List an Item', 'Seller Guide','Verification'].map((item) => (
                 <li key={item}>
                   <Link href="#" className="text-sm hover:text-accent transition-colors">
                     {item}
@@ -51,9 +51,9 @@ export function Footer() {
             <h3 className="font-mono text-xs tracking-widest text-background/50 mb-6">CONNECT</h3>
             <ul className="space-y-3">
               {[
-                { name: 'Twitter', url: '#' },
-                { name: 'Discord', url: '#' },
-                { name: 'Instagram', url: '#' },
+                { name: 'Twitter', url: 'https://x.com' },
+                { name: 'Discord', url: 'https://discord.com/' },
+                { name: 'Instagram', url: 'https://www.instagram.com' },
               ].map((item) => (
                 <li key={item.name}>
                   <a 
