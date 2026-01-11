@@ -65,11 +65,6 @@ export default function ProfilePage() {
           // Fallback logic: If first_name is missing but 'Full Name' exists (legacy data), try to split it
           let legacyFirst = '';
           let legacyLast = '';
-          if (!data.first_name && data['Full Name']) {
-            const parts = data['Full Name'].split(' ');
-            legacyFirst = parts[0] || '';
-            legacyLast = parts.slice(1).join(' ') || '';
-          }
 
           setFormData({
             firstName: data.first_name || legacyFirst || '', // Maps to 'first_name' column
@@ -108,14 +103,10 @@ export default function ProfilePage() {
         .upsert(
           {
             id: publicKey.toString(),
-            username: formData.firstName || 'User', // Use first name as default username
             
             // SAVE TO NEW COLUMNS
             first_name: formData.firstName,
             last_name: formData.lastName,
-
-            // Keep 'Full Name' synced for backward compatibility if you want
-            'Full Name': fullName, 
 
             address: formData.address,
             email: formData.email,
