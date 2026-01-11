@@ -1,47 +1,96 @@
-'use client';
+"use client";
 
-import { Navbar } from '@/components/Navbar';
-import { Footer } from '@/components/Footer';
-import { ListingCard } from '@/components/ListingCard';
-import { CategoryNav } from '@/components/CategoryNav';
-import { motion } from 'framer-motion';
-import { Search, SlidersHorizontal } from 'lucide-react';
-import { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { Navbar } from "@/components/Navbar";
+import { Footer } from "@/components/Footer";
+import { ListingCard } from "@/components/ListingCard";
+import { CategoryNav } from "@/components/CategoryNav";
+import { motion } from "framer-motion";
+import { Search, SlidersHorizontal } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
+import { useWallet } from "@solana/wallet-adapter-react";
 
-const allListings = [
-  { id: '1', title: 'Vintage Nike Windbreaker', price: 0.5, image: 'https://picsum.photos/seed/nike1/400/500', size: 'L', seller: 'DemoWallet123abc456', category: 'Outerwear' },
-  { id: '2', title: 'Carhartt WIP Beanie', price: 0.15, image: 'https://picsum.photos/seed/carhartt/400/500', size: 'OS', seller: 'DemoWallet789xyz', category: 'Accessories' },
-  { id: '3', title: 'Levis 501 Vintage Wash', price: 0.8, image: 'https://picsum.photos/seed/levis501/400/500', size: '32', seller: 'SellerABC123', category: 'Bottoms' },
-  { id: '4', title: 'Stüssy Logo Tee', price: 0.25, image: 'https://picsum.photos/seed/stussy/400/500', size: 'M', seller: 'StussyFan99', category: 'Tops' },
-  { id: '5', title: 'New Balance 550', price: 1.2, image: 'https://picsum.photos/seed/nb550/400/500', size: '10', seller: 'SneakerHead42', category: 'Shoes' },
-  { id: '6', title: 'Chrome Hearts Ring', price: 2.5, image: 'https://picsum.photos/seed/chrome/400/500', size: '9', seller: 'LuxuryVintage', category: 'Accessories' },
-  { id: '7', title: 'Kapital Bandana Jacket', price: 3.2, image: 'https://picsum.photos/seed/kapital/400/500', size: 'XL', seller: 'JapanArchive', category: 'Outerwear' },
-  { id: '8', title: 'Maison Margiela Tabi', price: 4.0, image: 'https://picsum.photos/seed/margiela/400/500', size: '42', seller: 'DesignerGrails', category: 'Shoes' },
-  { id: '9', title: 'Supreme Box Logo Hoodie', price: 2.8, image: 'https://picsum.photos/seed/supreme/400/500', size: 'L', seller: 'HypeCollector', category: 'Tops' },
-  { id: '10', title: 'Acne Studios Scarf', price: 0.6, image: 'https://picsum.photos/seed/acne/400/500', size: 'OS', seller: 'ScandinavianStyle', category: 'Accessories' },
-  { id: '11', title: 'Vintage Levi Trucker', price: 0.9, image: 'https://picsum.photos/seed/trucker/400/500', size: 'M', seller: 'VintageFinds', category: 'Outerwear' },
-  { id: '12', title: 'Nike Dunk Low', price: 1.5, image: 'https://picsum.photos/seed/dunk/400/500', size: '9.5', seller: 'DunkMaster', category: 'Shoes' },
-];
+interface Listing {
+  id: string;
+  title: string;
+  price: number;
+  image: string;
+  size: string;
+  seller: string;
+  category: string;
+}
 
 export default function ShopPage() {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [allListings, setAllListings] = useState<Listing[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { publicKey } = useWallet();
 
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const categories = Array.from(new Set(allListings.map(l => l.category))).sort();
+  const categories = Array.from(
+    new Set(allListings.map((l) => l.category))
+  ).sort();
   const searchParams = useSearchParams();
 
+  // Fetch listings from backend
   useEffect(() => {
-    const catParam = searchParams?.get('category');
+    const fetchListings = async () => {
+      if (!publicKey) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `http://localhost:5000/api/get-listings-user?wallet_id=${publicKey.toBase58()}`
+        );
+        const data = await response.json();
+
+        if (data.recommendations) {
+          // Map API response to listing format
+          const listings: Listing[] = data.recommendations.map(
+            (item: {
+              id: string;
+              product_name: string;
+              img_url: string;
+              price: number;
+              category: string;
+              similarity_score: number;
+            }) => ({
+              id: item.id,
+              title: item.product_name,
+              price: item.price,
+              image: item.img_url,
+              size: "OS", // Default size since API doesn't return it
+              seller: "Unknown", // Default seller since API doesn't return it
+              category: item.category,
+            })
+          );
+          setAllListings(listings);
+        }
+      } catch (error) {
+        console.error("Failed to fetch listings:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchListings();
+  }, [publicKey]);
+
+  useEffect(() => {
+    const catParam = searchParams?.get("category");
     if (!catParam) return;
-    if (catParam === 'all') {
+    if (catParam === "all") {
       setSelectedCategories([]);
       return;
     }
 
     // Try to find a matching category by name (case-insensitive)
-    const match = categories.find(c => c.toLowerCase() === catParam.toLowerCase());
+    const match = categories.find(
+      (c) => c.toLowerCase() === catParam.toLowerCase()
+    );
     if (match) {
       setSelectedCategories([match]);
     } else {
@@ -53,12 +102,18 @@ export default function ShopPage() {
   }, [searchParams?.toString()]);
 
   const toggleCategory = (cat: string) => {
-    setSelectedCategories(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]);
+    setSelectedCategories((prev) =>
+      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
+    );
   };
 
-  const filteredListings = allListings.filter(listing => {
-    const matchesSearch = searchQuery.trim() === '' || listing.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(listing.category);
+  const filteredListings = allListings.filter((listing) => {
+    const matchesSearch =
+      searchQuery.trim() === "" ||
+      listing.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory =
+      selectedCategories.length === 0 ||
+      selectedCategories.includes(listing.category);
     return matchesSearch && matchesCategory;
   });
 
@@ -73,7 +128,9 @@ export default function ShopPage() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-12"
         >
-          <h1 className="text-5xl md:text-6xl font-bold tracking-tight">SHOP</h1>
+          <h1 className="text-5xl md:text-6xl font-bold tracking-tight">
+            SHOP
+          </h1>
           <p className="text-muted mt-4 text-lg">
             {filteredListings.length} of {allListings.length} items available
           </p>
@@ -82,7 +139,10 @@ export default function ShopPage() {
         {/* Search and filters */}
         <div className="flex flex-col md:flex-row gap-4 mb-8">
           <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" size={20} />
+            <Search
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-muted"
+              size={20}
+            />
             <input
               type="text"
               placeholder="Search items..."
@@ -96,7 +156,9 @@ export default function ShopPage() {
             className="flex items-center justify-center gap-2 px-6 py-4 border border-border hover:border-foreground transition-colors"
           >
             <SlidersHorizontal size={20} />
-            <span className="font-mono text-sm uppercase tracking-wider">Filters</span>
+            <span className="font-mono text-sm uppercase tracking-wider">
+              Filters
+            </span>
           </button>
         </div>
 
@@ -104,12 +166,14 @@ export default function ShopPage() {
         {showFilters && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
+            animate={{ opacity: 1, height: "auto" }}
             className="mb-8 p-6 bg-card border border-border"
           >
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               <div>
-                <label className="text-xs font-mono uppercase tracking-wider text-muted mb-2 block">Size</label>
+                <label className="text-xs font-mono uppercase tracking-wider text-muted mb-2 block">
+                  Size
+                </label>
                 <select className="w-full p-3 bg-background border border-border">
                   <option>All Sizes</option>
                   <option>XS</option>
@@ -120,7 +184,9 @@ export default function ShopPage() {
                 </select>
               </div>
               <div>
-                <label className="text-xs font-mono uppercase tracking-wider text-muted mb-2 block">Price</label>
+                <label className="text-xs font-mono uppercase tracking-wider text-muted mb-2 block">
+                  Price
+                </label>
                 <select className="w-full p-3 bg-background border border-border">
                   <option>Any Price</option>
                   <option>Under 0.5 SOL</option>
@@ -130,7 +196,9 @@ export default function ShopPage() {
                 </select>
               </div>
               <div>
-                <label className="text-xs font-mono uppercase tracking-wider text-muted mb-2 block">Condition</label>
+                <label className="text-xs font-mono uppercase tracking-wider text-muted mb-2 block">
+                  Condition
+                </label>
                 <select className="w-full p-3 bg-background border border-border">
                   <option>Any Condition</option>
                   <option>New with tags</option>
@@ -140,7 +208,9 @@ export default function ShopPage() {
                 </select>
               </div>
               <div>
-                <label className="text-xs font-mono uppercase tracking-wider text-muted mb-2 block">Sort By</label>
+                <label className="text-xs font-mono uppercase tracking-wider text-muted mb-2 block">
+                  Sort By
+                </label>
                 <select className="w-full p-3 bg-background border border-border">
                   <option>Newest</option>
                   <option>Price: Low to High</option>
@@ -151,10 +221,19 @@ export default function ShopPage() {
 
             {/* Category multi-select */}
             <div className="mt-6">
-              <label className="text-xs font-mono uppercase tracking-wider text-muted mb-2 block">Categories</label>
+              <label className="text-xs font-mono uppercase tracking-wider text-muted mb-2 block">
+                Categories
+              </label>
               <div className="flex flex-wrap gap-2">
                 {categories.map((cat) => (
-                  <label key={cat} className={`inline-flex items-center px-3 py-2 border transition-colors duration-150 ${selectedCategories.includes(cat) ? 'bg-black text-white border-black' : 'bg-transparent border-border hover:border-foreground'} rounded cursor-pointer`}>
+                  <label
+                    key={cat}
+                    className={`inline-flex items-center px-3 py-2 border transition-colors duration-150 ${
+                      selectedCategories.includes(cat)
+                        ? "bg-black text-white border-black"
+                        : "bg-transparent border-border hover:border-foreground"
+                    } rounded cursor-pointer`}
+                  >
                     <input
                       type="checkbox"
                       className="mr-2"
@@ -173,7 +252,19 @@ export default function ShopPage() {
         <CategoryNav />
 
         {/* Listings grid */}
-        {filteredListings.length === 0 ? (
+        {loading ? (
+          <div className="mt-8 w-full text-center">
+            <p className="text-muted text-lg font-mono">
+              Loading recommendations...
+            </p>
+          </div>
+        ) : !publicKey ? (
+          <div className="mt-8 w-full text-center">
+            <p className="text-muted text-lg font-mono">
+              Connect your wallet to see personalized recommendations
+            </p>
+          </div>
+        ) : filteredListings.length === 0 ? (
           <div className="mt-8 w-full text-center">
             <p className="text-muted text-lg font-mono">No Items Found</p>
           </div>

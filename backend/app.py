@@ -11,6 +11,7 @@ from torchvision import models, transforms
 import torch.nn as nn
 from io import BytesIO
 from PIL import Image
+import numpy as np
 
 load_dotenv()
 
@@ -30,6 +31,11 @@ DBNAME = os.getenv("dbname")
 
 PINATA_API_KEY = os.getenv("PINATA_API_KEY")
 PINATA_SECRET_KEY = os.getenv("PINATA_SECRET_KEY")
+
+def euclidean(a, b):
+    a = np.asarray(a, dtype=np.float32)
+    b = np.asarray(b, dtype=np.float32)
+    return float(np.linalg.norm(a - b))
 
 def load_engine():
     # Architecture must match training EXACTLY
@@ -170,12 +176,17 @@ def mark_sold(listing_id):
 def turn_to_vector():
     img_add = request.args.get("img_address")
     id = request.args.get("id")
-    img = Image.open(BytesIO(img_add.content)).convert("RGB")
+    resp = requests.get(img_add, timeout=10)
+    resp.raise_for_status()
+    img = Image.open(BytesIO(resp.content)).convert("RGB")
     t_img = transform(img).unsqueeze(0).to(device)
                     
     with torch.no_grad():
         vec = model(t_img).cpu().numpy().flatten()
     
+    vec = vec.astype(float).tolist()
+
+
     connection = psycopg2.connect(
                 user=USER,
                 password=PASSWORD,
@@ -189,8 +200,204 @@ def turn_to_vector():
     SET vector = %s
     WHERE id = %s
     """, (vec, id))
-
+    connection.commit()
     return jsonify({"vector": vec})
+
+
+
+@app.route('/api/get-listings-user', methods=['GET'])
+def obtain_shop_listings():
+    wallet_id = request.args.get("wallet_id")
+    connection = psycopg2.connect(
+                user=USER,
+                password=PASSWORD,
+                host=HOST,
+                port=PORT,
+                dbname=DBNAME
+        )
+    cursor = connection.cursor()
+    cursor.execute("""
+    SELECT id, product_name, img_urls, price, category, vector
+    FROM "Listings"
+    WHERE sold = False
+    """)
+    listing_list = cursor.fetchall()
+    cursor.execute("""
+    SELECT "Taste-vector"
+    FROM "Userbase"
+    WHERE id = %s
+    """, (wallet_id,))
+    user_vec = cursor.fetchone()
+
+    
+    user_vector = user_vec[0]  # Extract the vector from the tuple
+    
+    # Dictionary comprehension with similarity scores
+    # Convert img_urls list to tuple to make it hashable
+    similarities = {
+        (listing[0], listing[1], tuple(listing[2]) if isinstance(listing[2], list) else listing[2], listing[3], listing[4]): euclidean(user_vector, listing[5])
+        for listing in listing_list
+    }
+    
+    # Sort dictionary by values (euclidean distances - smaller is more similar)
+    sorted_recommendations = dict(sorted(similarities.items(), key=lambda item: item[1]))
+    
+    cursor.close()
+    connection.close()
+    
+    # Convert to a more readable format for the frontend
+    recommendations = [
+        {
+            "id": key[0],
+            "product_name": key[1],
+            "img_url": list(key[2]) if isinstance(key[2], tuple) else key[2], 
+            "price": key[3],
+            "category": key[4],
+            "similarity_score": value
+        }
+        for key, value in sorted_recommendations.items()
+    ]
+    
+    print(recommendations)
+
+    return jsonify({"recommendations": recommendations})
+
+
+@app.route('/api/add-like', methods=['PUT'])
+def adjust_taste_with_save():
+    listing_id = request.args.get("listing_id")
+    wallet_id = request.args.get("wallet_id")
+
+    connection = psycopg2.connect(
+        user=USER,
+        password=PASSWORD,
+        host=HOST,
+        port=PORT,
+        dbname=DBNAME
+    )
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute("""
+        SELECT "Taste-vector"
+        FROM "Userbase"
+        WHERE id = %s
+        """, (wallet_id,))
+
+        og_vec_row = cursor.fetchone()
+        og_vec = og_vec_row[0] if og_vec_row else None
+
+        cursor.execute("""
+        SELECT vector
+        FROM "Listings"
+        WHERE id = %s
+        """, (listing_id,))
+        listing_row = cursor.fetchone()
+        if not listing_row:
+            return jsonify({"error": "Listing not found"}), 404
+        listing_vec = listing_row[0]
+
+        cursor.execute("""
+        SELECT saved
+        FROM "Userbase"
+        WHERE id = %s
+        """, (wallet_id,))
+        saved_row = cursor.fetchone()
+        saved_list = (saved_row[0] if saved_row else None) or []
+        total_saved = len(saved_list)
+
+        # Update taste vector by averaging in the newly saved listing.
+        # Assumes `saved` already includes this listing id.
+        if not og_vec:
+            updated_vec = listing_vec
+        elif total_saved > 1:
+            updated_vec = [float((x * (total_saved - 1) + y) / total_saved) for x, y in zip(og_vec, listing_vec)]
+        else:
+            updated_vec = listing_vec
+
+        cursor.execute("""
+        UPDATE "Userbase"
+        SET "Taste-vector" = %s
+        WHERE id = %s
+        """, (updated_vec, wallet_id))
+
+        connection.commit()
+        return jsonify({"vector": updated_vec})
+    finally:
+        cursor.close()
+        connection.close()
+
+
+@app.route('/api/remove-like', methods=['PUT'])
+def adjust_taste_with_unsave():
+    listing_id = request.args.get("listing_id")
+    wallet_id = request.args.get("wallet_id")
+
+    connection = psycopg2.connect(
+        user=USER,
+        password=PASSWORD,
+        host=HOST,
+        port=PORT,
+        dbname=DBNAME
+    )
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute("""
+        SELECT "Taste-vector"
+        FROM "Userbase"
+        WHERE id = %s
+        """, (wallet_id,))
+
+        og_vec_row = cursor.fetchone()
+        og_vec = og_vec_row[0] if og_vec_row else None
+
+        if not og_vec:
+            # No taste vector to adjust
+            return jsonify({"vector": None})
+
+        cursor.execute("""
+        SELECT vector
+        FROM "Listings"
+        WHERE id = %s
+        """, (listing_id,))
+        listing_row = cursor.fetchone()
+        if not listing_row:
+            return jsonify({"error": "Listing not found"}), 404
+        listing_vec = listing_row[0]
+
+        cursor.execute("""
+        SELECT saved
+        FROM "Userbase"
+        WHERE id = %s
+        """, (wallet_id,))
+        saved_row = cursor.fetchone()
+        saved_list = (saved_row[0] if saved_row else None) or []
+        total_saved = len(saved_list)  # Count AFTER removal
+
+        # Reverse the taste vector averaging.
+        # Before removal, count was total_saved + 1
+        # og_vec = (prev_vec * total_saved + listing_vec) / (total_saved + 1)
+        # So: prev_vec = (og_vec * (total_saved + 1) - listing_vec) / total_saved
+        if total_saved == 0:
+            # No more saved items, reset taste vector to None or keep as is
+            updated_vec = None
+        else:
+            n_before = total_saved + 1
+            updated_vec = [float((x * n_before - y) / total_saved) for x, y in zip(og_vec, listing_vec)]
+
+        cursor.execute("""
+        UPDATE "Userbase"
+        SET "Taste-vector" = %s
+        WHERE id = %s
+        """, (updated_vec, wallet_id))
+
+        connection.commit()
+        return jsonify({"vector": updated_vec})
+    finally:
+        cursor.close()
+        connection.close()
+
 
 @app.route('/api/upload', methods=['POST'])
 def upload_to_ipfs():
